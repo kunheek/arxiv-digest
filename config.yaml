@@ -11,29 +11,27 @@ announce_types: [new, cross]
 # Describe your interests in plain language. This is the single most
 # important setting: Claude scores every abstract against it.
 interest_profile: |
-  I am a PhD student working on inference-time methods for 3D/4D reconstruction
-  and video diffusion transformers.
+  I am a PhD student working on 3D/4D reconstruction and video diffusion transformers.
   Core interests (score high):
+  - 3D/4D reconstruction from video, multi-view, or single-view (NeRF, meshes,
+    voxel grids, implicit surfaces, dynamic scene reconstruction)
   - Feed-forward / generalizable 3D and 4D reconstruction (DUSt3R / MASt3R / VGGT line,
     pointmap regression, dynamic scene reconstruction, 4D Gaussian splatting)
-  - Efficient inference for video diffusion transformers: feature/attention caching,
-    sparse / sliding-window / linear attention, token pruning or merging,
-    step distillation, quantization, parallel/distributed inference
+  - Efficient inference for video diffusion transformers: sparse / sliding-window / linear attention, token pruning or merging
   - Video generation with 3D/4D consistency, camera control, world models
   Adjacent interests (score medium):
   - Novel view synthesis, NeRF/3DGS efficiency, SLAM with learned priors
   - Diffusion model theory and sampling acceleration in general
   - Efficient transformers / attention kernels
+  - Optimization for deep learning
+  - Bayesian deep learning and probabilistic generative models
   Not interested (score low): medical imaging, remote sensing, pure NLP/LLM papers,
   adversarial robustness, federated learning, unless they clearly touch the above.
 
 # Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
 seed_papers:
-  - "VGGT: Visual Geometry Grounded Transformer"
-  - "DUSt3R: Geometric 3D Vision Made Easy"
-  - "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering"
-  - "Sparse VideoGen: Accelerating Video Diffusion Transformers with Spatial-Temporal Sparsity"
-  - "Timestep Embedding Tells: It's Time to Cache for Video Diffusion Model"   # TeaCache
+  - "3D Gaussian Splatting as Markov Chain Monte Carlo"
+  - "Shape of Motion: 4D Reconstruction from a Single Video"
 
 # Researchers whose new papers you never want to miss (matched against author lists).
 # Use the name exactly as it appears on arXiv.
