@@ -85,4 +85,8 @@ feedback:
 delivery:
   discord: true
   sheets: true
+  # Sheet tabs: monthly → one tab per month ("2026-10", newest first)
+  #             yearly  → one tab per year ("2026")
+  #             single  → everything in the tab named by sheet_worksheet
+  sheet_tabs: monthly
   sheet_worksheet: papers

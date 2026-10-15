@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import time
 from dataclasses import asdict
 
@@ -77,16 +78,36 @@ WIDTHS = {"date": 90, "arxiv_id": 95, "title": 380, "final_score": 70, "interest
           "link": 160, "read?": 55, "my rating (1-5)": 80}
 
 
-def _sheet(cfg):
+TAB_RE = re.compile(r"^\d{4}(-\d{2})?$")   # "2026" or "2026-10"
+
+
+def tab_name(cfg: dict, date: str) -> str:
+    """Which tab a given day goes to: monthly (default) → '2026-10', yearly → '2026',
+    single → the fixed sheet_worksheet name."""
+    mode = cfg.get("delivery", {}).get("sheet_tabs", "monthly")
+    if mode == "yearly":
+        return date[:4]
+    if mode == "single":
+        return cfg.get("delivery", {}).get("sheet_worksheet", "papers")
+    return date[:7]
+
+
+def _spreadsheet():
     import gspread
     creds = json.loads(os.environ["GOOGLE_CREDS"])
-    gc = gspread.service_account_from_dict(creds)
-    sh = gc.open_by_key(os.environ["SHEET_ID"])
-    name = cfg["delivery"].get("sheet_worksheet", "papers")
+    return gspread.service_account_from_dict(creds).open_by_key(os.environ["SHEET_ID"])
+
+
+def _sheet(cfg, date: str):
+    """Open (or create, as the first tab) the tab for `date`."""
+    import gspread
+    sh = _spreadsheet()
+    name = tab_name(cfg, date)
     try:
         return sh.worksheet(name)
     except gspread.WorksheetNotFound:
-        return sh.add_worksheet(name, rows=1000, cols=len(SHEET_HEADER))
+        print(f"    creating new tab '{name}'")
+        return sh.add_worksheet(name, rows=1000, cols=len(SHEET_HEADER), index=0)
 
 
 def _grid(ws, col, r0=1, r1=None, c1=None):
@@ -193,7 +214,7 @@ def to_sheets(papers: list[Paper], date: str, cfg: dict, replace: bool = False) 
     rows are removed first and your read?/rating values are carried over."""
     if not papers:
         return
-    ws = _sheet(cfg)
+    ws = _sheet(cfg, date)
     meta = _meta(ws)
     if "basicFilter" not in meta:
         _setup(ws, meta)
@@ -220,9 +241,9 @@ def to_sheets(papers: list[Paper], date: str, cfg: dict, replace: bool = False) 
                                                         [r0 + len(rows) - 1])})
 
 
-def reformat(cfg: dict) -> None:
-    """Re-apply the layout to the whole sheet without changing any data."""
-    ws = _sheet(cfg)
+def reformat(cfg: dict, date: str) -> None:
+    """Re-apply the layout to the tab holding `date`, without changing any data."""
+    ws = _sheet(cfg, date)
     _setup(ws, _meta(ws))
     rows = _data_rows(ws)
     n = len(rows)
@@ -231,7 +252,7 @@ def reformat(cfg: dict) -> None:
     dates = [_date_key(r[0]) if r else "" for r in rows]
     ends = [i + 1 for i in range(n) if i == n - 1 or dates[i] != dates[i + 1]]
     ws.spreadsheet.batch_update({"requests": _rows_reqs(ws, 1, 1 + n, ends)})
-    print(f"    re-applied layout to {n} rows across {len(ends)} days")
+    print(f"    re-applied layout to {n} rows across {len(ends)} days in tab '{ws.title}'")
 
 
 # ── Saved results (so the Sheet can be rebuilt without re-running Claude) ──
@@ -274,7 +295,15 @@ def liked_from_sheets(cfg: dict) -> list[str]:
     if not fb.get("enabled") or not os.environ.get("GOOGLE_CREDS"):
         return []
     try:
-        records = _sheet(cfg).get_all_records()
+        sh = _spreadsheet()
+        name = cfg.get("delivery", {}).get("sheet_worksheet", "papers")
+        # newest tabs first: "2026-10", "2026-09", ... then the legacy single tab
+        tabs = sorted((w for w in sh.worksheets() if TAB_RE.match(w.title)),
+                      key=lambda w: w.title, reverse=True)
+        tabs += [w for w in sh.worksheets() if w.title == name]
+        records = []
+        for w in tabs[:6]:                          # last ~6 months is plenty
+            records += w.get_all_records(expected_headers=["title", "my rating (1-5)"])
     except Exception as e:
         print(f"  (feedback skipped: {e})")
         return []

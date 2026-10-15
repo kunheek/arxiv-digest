@@ -37,7 +37,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
                     help="rewrite one day in the Sheet from results/DATE.json")
     ap.add_argument("--reformat", action="store_true",
                     help="re-apply the Sheet layout to all rows")
-    ap.add_argument("--date", help="YYYY-MM-DD for --sheets-only (default: latest saved)")
+    ap.add_argument("--date", help="YYYY-MM-DD: day for --sheets-only (default: latest saved) "
+                                   "or month tab for --reformat (default: today)")
     ap.add_argument("--results", default=deliver.RESULTS_DIR)
     args = ap.parse_args(argv)
 
@@ -56,7 +57,7 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             deliver.to_sheets(keep, date, cfg, replace=True)
         if args.reformat:
             print("re-applying Sheet layout")
-            deliver.reformat(cfg)
+            deliver.reformat(cfg, args.date or today)
         return 0
     if llm is None:
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()

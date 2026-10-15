@@ -93,6 +93,12 @@ Everything lives in `config.yaml`. Edit it on github.com and commit; the next ru
 - **Cost knobs:** `summarize_top_k`, `enrich_top_n`. Switching the summarizer to
   `claude-opus-5-5` roughly doubles summary cost.
 
+## Sheet tabs
+Papers go into **one tab per month** (`2026-10`, `2026-09`, …), with the newest month first.
+New tabs are created and formatted automatically. Set `delivery.sheet_tabs` in
+`config.yaml` to `yearly` (`2026`) or `single` (everything in one tab) to change this.
+The feedback loop reads your ratings from the last ~6 tabs.
+
 ## Updating the Sheet without re-running (free)
 Each run saves its scored papers to `results/YYYY-MM-DD.json` (kept 60 days).
 These modes rebuild the Sheet from those files, with no arXiv or Claude calls:
