@@ -93,6 +93,18 @@ Everything lives in `config.yaml`. Edit it on github.com and commit; the next ru
 - **Cost knobs:** `summarize_top_k`, `enrich_top_n`. Switching the summarizer to
   `claude-opus-5-5` roughly doubles summary cost.
 
+## Updating the Sheet without re-running (free)
+Each run saves its scored papers to `results/YYYY-MM-DD.json` (kept 60 days).
+These modes rebuild the Sheet from those files, with no arXiv or Claude calls:
+
+```bash
+python run.py --sheets-only                     # rewrite the latest day
+python run.py --sheets-only --date 2026-10-15   # rewrite a specific day
+python run.py --reformat                        # re-apply layout to every row
+```
+`--sheets-only` replaces that day's rows in place and keeps your `read?` / rating values.
+On GitHub: **Actions → daily-arxiv-digest → Run workflow → mode**.
+
 ## Notes
 - `state/seen.json` remembers processed papers so nothing is posted twice. The workflow
   commits it after each run, which also keeps the scheduled workflow from being paused for

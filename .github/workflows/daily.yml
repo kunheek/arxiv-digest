@@ -7,10 +7,18 @@ on:
     - cron: "7 6 * * 1-5"
   workflow_dispatch:          # "Run workflow" button for manual runs
     inputs:
-      dry_run:
-        description: "Dry run (no Discord/Sheets)"
-        type: boolean
-        default: false
+      mode:
+        description: "What to run"
+        type: choice
+        default: digest
+        options:
+          - digest          # normal: fetch, score, Discord + Sheets
+          - dry-run         # normal but no Discord/Sheets, nothing saved
+          - sheets-only     # rewrite latest saved day in the Sheet (free)
+          - reformat        # re-apply Sheet layout to all rows (free)
+      date:
+        description: "Date for sheets-only (YYYY-MM-DD, blank = latest)"
+        required: false
 
 permissions:
   contents: write             # lets the job commit state/seen.json
@@ -39,7 +47,15 @@ jobs:
           DISCORD_WEBHOOK:   ${{ secrets.DISCORD_WEBHOOK }}
           GOOGLE_CREDS:      ${{ secrets.GOOGLE_CREDS }}
           SHEET_ID:          ${{ secrets.SHEET_ID }}
-        run: python run.py ${{ inputs.dry_run && '--dry-run' || '' }}
+          MODE: ${{ inputs.mode || 'digest' }}
+          DATE: ${{ inputs.date }}
+        run: |
+          case "$MODE" in
+            dry-run)     python run.py --dry-run ;;
+            sheets-only) python run.py --sheets-only ${DATE:+--date "$DATE"} ;;
+            reformat)    python run.py --reformat ;;
+            *)           python run.py ;;
+          esac
 
       - name: Show digest in run summary
         if: always()
@@ -50,6 +66,6 @@ jobs:
         run: |
           git config user.name  "digest-bot"
           git config user.email "digest-bot@users.noreply.github.com"
-          git add state/seen.json
+          git add state/seen.json results/ 2>/dev/null || git add state/seen.json
           git diff --cached --quiet || git commit -m "digest state $(date -u +%F)"
           git push

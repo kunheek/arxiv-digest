@@ -1,9 +1,11 @@
 """Delivery: Discord webhook, Google Sheets, and a local markdown file."""
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 import time
+from dataclasses import asdict
 
 import requests
 
@@ -95,15 +97,19 @@ def _grid(ws, col, r0=1, r1=None, c1=None):
     return g
 
 
-def _has_filter(ws) -> bool:
+def _meta(ws) -> dict:
     meta = ws.spreadsheet.fetch_sheet_metadata(
-        {"fields": "sheets(properties.sheetId,basicFilter)"})
-    return any(sh["properties"]["sheetId"] == ws.id and "basicFilter" in sh
-               for sh in meta.get("sheets", []))
+        {"fields": "sheets(properties.sheetId,basicFilter,conditionalFormats)"})
+    return next((sh for sh in meta.get("sheets", [])
+                 if sh["properties"]["sheetId"] == ws.id), {})
 
 
-def _setup_once(ws) -> None:
-    """Header, filter, widths, wrapping, score colours. Runs when no filter exists yet."""
+def _setup(ws, meta: dict) -> None:
+    """Header, filter, widths, wrapping, score colours.
+
+    Runs automatically when the sheet has no filter yet, or via --reformat.
+    Score colours are only added if no rule exists on that column (no duplicates).
+    """
     n = len(SHEET_HEADER)
     if ws.row_values(1) != SHEET_HEADER:
         ws.update(values=[SHEET_HEADER], range_name="A1")
@@ -122,19 +128,20 @@ def _setup_once(ws) -> None:
         {"repeatCell": {"range": _grid(ws, 0, 1, None, n), "cell": {"userEnteredFormat": {
             "wrapStrategy": "CLIP", "verticalAlignment": "TOP"}},
             "fields": "userEnteredFormat(wrapStrategy,verticalAlignment)"}},
-        # score colours: >= 9 dark green, >= 7 light green
-        {"addConditionalFormatRule": {"index": 0, "rule": {
-            "ranges": [_grid(ws, COL["final_score"])],
-            "booleanRule": {"condition": {"type": "NUMBER_GREATER_THAN_EQ",
-                                          "values": [{"userEnteredValue": "9"}]},
-                            "format": {"backgroundColor": green(0.58, 0.83, 0.6),
-                                       "textFormat": {"bold": True}}}}}},
-        {"addConditionalFormatRule": {"index": 1, "rule": {
-            "ranges": [_grid(ws, COL["final_score"])],
-            "booleanRule": {"condition": {"type": "NUMBER_GREATER_THAN_EQ",
-                                          "values": [{"userEnteredValue": "7"}]},
-                            "format": {"backgroundColor": green(0.85, 0.94, 0.85)}}}}},
     ]
+    score_col = COL["final_score"]
+    has_score_rule = any(r.get("startColumnIndex") == score_col
+                         for rule in meta.get("conditionalFormats", [])
+                         for r in rule.get("ranges", []))
+    if not has_score_rule:  # score colours: >= 9 dark green, >= 7 light green
+        for idx, (thr, colour, bold) in enumerate([("9", green(0.58, 0.83, 0.6), True),
+                                                   ("7", green(0.85, 0.94, 0.85), False)]):
+            reqs.append({"addConditionalFormatRule": {"index": idx, "rule": {
+                "ranges": [_grid(ws, score_col)],
+                "booleanRule": {"condition": {"type": "NUMBER_GREATER_THAN_EQ",
+                                              "values": [{"userEnteredValue": thr}]},
+                                "format": {"backgroundColor": colour,
+                                           "textFormat": {"bold": bold}}}}}})
     for name, px in WIDTHS.items():
         reqs.append({"updateDimensionProperties": {"range": {
             "sheetId": ws.id, "dimension": "COLUMNS",
@@ -143,39 +150,122 @@ def _setup_once(ws) -> None:
     ws.spreadsheet.batch_update({"requests": reqs})
 
 
-def _row(p: Paper, date: str) -> list:
+def _row(p: Paper, date: str, read=False, rating="") -> list:
     title = p.title.replace('"', '""')
     return [date, p.id, f'=HYPERLINK("{p.link}", "{title}")', p.final, p.interest,
             "; ".join(p.author_hits + p.inst_hits), p.tldr, p.why, p.reason,
             ", ".join(p.tags), ", ".join(p.authors[:20]), " | ".join(p.affiliations)[:2000],
-            ", ".join(p.categories), p.code_url, p.link, False, ""]
+            ", ".join(p.categories), p.code_url, p.link, read, rating]
 
 
-def to_sheets(papers: list[Paper], date: str, cfg: dict) -> None:
-    if not papers:
-        return
-    ws = _sheet(cfg)
-    if not _has_filter(ws):
-        _setup_once(ws)
-    rows = [_row(p, date) for p in papers]          # already ranked best-first
-    ws.insert_rows(rows, row=2, value_input_option="USER_ENTERED")
-    r0, r1 = 1, 1 + len(rows)                       # 0-based rows of the new block
-    ws.spreadsheet.batch_update({"requests": [
-        # "read?" → checkbox
+def _rows_reqs(ws, r0: int, r1: int, day_ends: list[int]) -> list[dict]:
+    """Checkbox + rating dropdown on rows [r0, r1) and a line under each day."""
+    reqs = [
         {"setDataValidation": {"range": _grid(ws, COL["read?"], r0, r1),
                                "rule": {"condition": {"type": "BOOLEAN"}}}},
-        # "my rating" → 1-5 dropdown
         {"setDataValidation": {"range": _grid(ws, COL["my rating (1-5)"], r0, r1),
                                "rule": {"condition": {"type": "ONE_OF_LIST", "values": [
                                    {"userEnteredValue": str(i)} for i in range(1, 6)]},
                                         "showCustomUi": True, "strict": True}}},
-        # (no font/colour override: new rows copy the style of the row below,
-        #  so your own fonts, colours and alternating colours carry over)
-        # thin line above the new day so days are easy to tell apart
-        {"updateBorders": {"range": _grid(ws, 0, r1 - 1, r1, len(SHEET_HEADER)),
-                           "bottom": {"style": "SOLID_MEDIUM",
-                                      "color": {"red": 0.4, "green": 0.4, "blue": 0.4}}}},
-    ]})
+    ]
+    # no font/colour override: rows keep the style of the row below them,
+    # so your own fonts, colours and alternating colours carry over
+    for r in day_ends:
+        reqs.append({"updateBorders": {"range": _grid(ws, 0, r, r + 1, len(SHEET_HEADER)),
+                     "bottom": {"style": "SOLID_MEDIUM",
+                                "color": {"red": 0.4, "green": 0.4, "blue": 0.4}}}})
+    return reqs
+
+
+def _date_key(v) -> str:
+    """Sheets stores dates as serial numbers; normalise to YYYY-MM-DD."""
+    if isinstance(v, (int, float)) and v > 0:
+        return (dt.date(1899, 12, 30) + dt.timedelta(days=int(v))).isoformat()
+    return str(v).strip()
+
+
+def _data_rows(ws) -> list[list]:
+    return ws.get("A2:Q", value_render_option="UNFORMATTED_VALUE") or []
+
+
+def to_sheets(papers: list[Paper], date: str, cfg: dict, replace: bool = False) -> None:
+    """Insert one day's papers (best first). With replace=True, that day's existing
+    rows are removed first and your read?/rating values are carried over."""
+    if not papers:
+        return
+    ws = _sheet(cfg)
+    meta = _meta(ws)
+    if "basicFilter" not in meta:
+        _setup(ws, meta)
+
+    keep, at = {}, 2                                   # 1-based row to insert at
+    if replace:
+        old = _data_rows(ws)
+        idx = [i for i, r in enumerate(old) if r and _date_key(r[0]) == date]
+        for i in idx:
+            r = old[i] + [""] * len(SHEET_HEADER)
+            keep[str(r[COL["arxiv_id"]])] = (r[COL["read?"]] or False, r[COL["my rating (1-5)"]])
+        if idx:
+            at = idx[0] + 2
+            ws.spreadsheet.batch_update({"requests": [
+                {"deleteDimension": {"range": {"sheetId": ws.id, "dimension": "ROWS",
+                                               "startIndex": i + 1, "endIndex": i + 2}}}
+                for i in sorted(idx, reverse=True)]})
+        print(f"    replacing {len(idx)} existing rows for {date}")
+
+    rows = [_row(p, date, *keep.get(p.id, (False, ""))) for p in papers]
+    ws.insert_rows(rows, row=at, value_input_option="USER_ENTERED")
+    r0 = at - 1
+    ws.spreadsheet.batch_update({"requests": _rows_reqs(ws, r0, r0 + len(rows),
+                                                        [r0 + len(rows) - 1])})
+
+
+def reformat(cfg: dict) -> None:
+    """Re-apply the layout to the whole sheet without changing any data."""
+    ws = _sheet(cfg)
+    _setup(ws, _meta(ws))
+    rows = _data_rows(ws)
+    n = len(rows)
+    if not n:
+        return
+    dates = [_date_key(r[0]) if r else "" for r in rows]
+    ends = [i + 1 for i in range(n) if i == n - 1 or dates[i] != dates[i + 1]]
+    ws.spreadsheet.batch_update({"requests": _rows_reqs(ws, 1, 1 + n, ends)})
+    print(f"    re-applied layout to {n} rows across {len(ends)} days")
+
+
+# ── Saved results (so the Sheet can be rebuilt without re-running Claude) ──
+RESULTS_DIR = "results"
+KEEP_RESULT_DAYS = 60
+
+
+def save_results(papers: list[Paper], date: str, folder: str = RESULTS_DIR) -> str:
+    os.makedirs(folder, exist_ok=True)
+    slim = []
+    for p in papers:
+        d = asdict(p)
+        d.pop("intro", None)           # big and not needed for the Sheet
+        d["abstract"] = d["abstract"][:1500]
+        slim.append(d)
+    path = os.path.join(folder, f"{date}.json")
+    with open(path, "w") as f:
+        json.dump(slim, f, ensure_ascii=False, indent=1)
+    cutoff = (dt.date.fromisoformat(date) - dt.timedelta(days=KEEP_RESULT_DAYS)).isoformat()
+    for name in os.listdir(folder):
+        if name.endswith(".json") and name[:-5] < cutoff:
+            os.remove(os.path.join(folder, name))
+    return path
+
+
+def load_results(date: str | None = None, folder: str = RESULTS_DIR) -> tuple[str, list[Paper]]:
+    files = sorted(f[:-5] for f in os.listdir(folder) if f.endswith(".json")) \
+        if os.path.isdir(folder) else []
+    if not files:
+        raise FileNotFoundError(f"no saved results in {folder}/ yet (run the full digest once)")
+    date = date or files[-1]
+    with open(os.path.join(folder, f"{date}.json")) as f:
+        papers = [Paper(**d) for d in json.load(f)]
+    return date, papers
 
 
 def liked_from_sheets(cfg: dict) -> list[str]:

@@ -3,6 +3,11 @@
     python run.py                 # full run: fetch → score → enrich → summarize → deliver
     python run.py --dry-run       # no Discord/Sheets, no state update; writes digest.md
     python run.py --max-papers 60 # cap papers scored (cheap test)
+
+  Sheet-only modes (no arXiv, no Claude, free):
+    python run.py --sheets-only               # rewrite the latest saved day in the Sheet
+    python run.py --sheets-only --date 2026-10-15
+    python run.py --reformat                  # re-apply layout to every row, data untouched
 """
 from __future__ import annotations
 
@@ -28,11 +33,31 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--state", default="state/seen.json")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--max-papers", type=int, default=0)
+    ap.add_argument("--sheets-only", action="store_true",
+                    help="rewrite one day in the Sheet from results/DATE.json")
+    ap.add_argument("--reformat", action="store_true",
+                    help="re-apply the Sheet layout to all rows")
+    ap.add_argument("--date", help="YYYY-MM-DD for --sheets-only (default: latest saved)")
+    ap.add_argument("--results", default=deliver.RESULTS_DIR)
     args = ap.parse_args(argv)
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
     today = dt.datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+
+    if args.sheets_only or args.reformat:
+        if not (os.environ.get("GOOGLE_CREDS") and os.environ.get("SHEET_ID")):
+            print("ERROR: GOOGLE_CREDS and SHEET_ID must be set for Sheet-only modes.")
+            return 1
+        if args.sheets_only:
+            date, saved = deliver.load_results(args.date, args.results)
+            keep = [p for p in saved if p.interest >= cfg["limits"]["sheets_min_interest"]]
+            print(f"rewriting {len(keep)} saved papers for {date} (no arXiv / Claude calls)")
+            deliver.to_sheets(keep, date, cfg, replace=True)
+        if args.reformat:
+            print("re-applying Sheet layout")
+            deliver.reformat(cfg)
+        return 0
     if llm is None:
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if not key:
@@ -76,6 +101,10 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     stats = {"total": len(papers), "cost": llm.cost, "calls": llm.calls}
     print(f"5/5 delivering  (≈ ${llm.cost:.3f}, {llm.calls} calls)")
     deliver.to_markdown(top, today, stats, "digest.md")
+    saved = deliver.save_results(
+        [p for p in ranked if p.interest >= cfg["limits"]["sheets_min_interest"]],
+        today, args.results)
+    print(f"    saved results to {saved}")
     if use_discord:
         deliver.to_discord(top[: cfg["limits"]["discord_top_k"]], today, stats,
                            os.environ["DISCORD_WEBHOOK"])

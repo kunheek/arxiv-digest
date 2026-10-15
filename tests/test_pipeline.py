@@ -107,7 +107,7 @@ def test_end_to_end(tmp_path, monkeypatch):
     cfg["watch_institutions"] = ["University of Oxford|Oxford"]
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
-    args = ["--state", str(state), "--config", str(cfg_path)]
+    args = ["--state", str(state), "--config", str(cfg_path), "--results", str(tmp_path / "results")]
     assert run.main(args, llm=llm, fetcher=fetcher) == 0
 
     out = md.read_text()
@@ -138,3 +138,73 @@ def test_failed_batch_is_skipped_not_fatal():
             raise RuntimeError("boom")
     score_all(papers, cfg, Flaky(), [])   # must not raise
     assert all(p.interest == 0 for p in papers)
+
+
+# ── Sheet-only modes ───────────────────────────────────────────
+class FakeSS:
+    def __init__(self, ws): self.ws, self.batches = ws, []
+    def fetch_sheet_metadata(self, params):
+        return {"sheets": [{"properties": {"sheetId": 7}, "basicFilter": {}}]}
+    def batch_update(self, body):
+        self.batches.append(body["requests"])
+        for r in body["requests"]:
+            if "deleteDimension" in r:
+                i = r["deleteDimension"]["range"]["startIndex"]  # 0-based incl. header
+                del self.ws.rows[i - 1]
+
+
+class FakeWS:
+    id = 7
+    def __init__(self, rows): self.rows = rows; self.spreadsheet = FakeSS(self)
+    def row_values(self, i): return __import__("digest.deliver", fromlist=["x"]).SHEET_HEADER
+    def get(self, rng, value_render_option=None): return [list(r) for r in self.rows]
+    def insert_rows(self, rows, row, value_input_option):
+        self.rows[row - 2:row - 2] = rows
+
+
+def test_save_load_and_replace_day(tmp_path, monkeypatch):
+    from digest import deliver
+    from digest.fetch import Paper
+    papers = [Paper(f"2610.0000{i}", f"T{i}", "abs", ["A"], ["cs.CV"], "new",
+                    f"https://arxiv.org/abs/2610.0000{i}", interest=8 - i, final=8 - i,
+                    intro="x" * 5000) for i in range(3)]
+    deliver.save_results(papers, "2026-10-15", str(tmp_path))
+    date, loaded = deliver.load_results(None, str(tmp_path))
+    assert date == "2026-10-15" and [p.id for p in loaded] == [p.id for p in papers]
+    assert loaded[0].intro == ""                                   # intro not stored
+
+    # sheet: today (as a date serial, like Sheets returns) with a rating, then yesterday
+    serial = (__import__("datetime").date(2026, 10, 15) - __import__("datetime").date(1899, 12, 30)).days
+    old_today = ["x"] * 17; old_today[0] = serial; old_today[1] = "2610.00001"
+    old_today[15], old_today[16] = True, 5
+    yesterday = ["2026-10-14", "2610.99999"] + [""] * 15
+    ws = FakeWS([old_today, yesterday])
+    monkeypatch.setattr(deliver, "_sheet", lambda cfg: ws)
+    deliver.to_sheets(loaded, "2026-10-15", {}, replace=True)
+
+    ids = [r[1] for r in ws.rows]
+    assert ids == ["2610.00000", "2610.00001", "2610.00002", "2610.99999"]  # replaced in place
+    kept = ws.rows[1]
+    assert kept[15] is True and kept[16] == 5                     # read?/rating preserved
+    assert ws.rows[0][15] is False and ws.rows[0][16] == ""
+
+    deliver.reformat({})
+    last = ws.spreadsheet.batches[-1]
+    borders = [r["updateBorders"]["range"]["startRowIndex"] for r in last if "updateBorders" in r]
+    assert borders == [3, 4]                                       # under each day
+
+
+def test_sheets_only_mode_makes_no_api_calls(tmp_path, monkeypatch):
+    from digest import deliver
+    from digest.fetch import Paper
+    deliver.save_results([Paper("2610.1", "T", "a", [], [], "new", "l", interest=9, final=9)],
+                         "2026-10-15", str(tmp_path))
+    got = {}
+    monkeypatch.setattr(deliver, "to_sheets",
+                        lambda ps, d, cfg, replace=False: got.update(n=len(ps), d=d, r=replace))
+    monkeypatch.setenv("GOOGLE_CREDS", "{}"); monkeypatch.setenv("SHEET_ID", "x")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    boom = lambda *a: (_ for _ in ()).throw(AssertionError("arXiv must not be fetched"))
+    assert run.main(["--sheets-only", "--results", str(tmp_path)], fetcher=boom) == 0
+    assert got == {"n": 1, "d": "2026-10-15", "r": True}
