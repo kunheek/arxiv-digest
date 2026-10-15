@@ -4,3 +4,6 @@ __pycache__/
 digest.md
 google-creds.json
 *.json.key
+
+# service-account keys and other secrets in the project root (state/seen.json is still tracked)
+/*.json
