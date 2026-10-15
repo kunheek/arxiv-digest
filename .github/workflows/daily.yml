@@ -2,9 +2,13 @@ name: daily-arxiv-digest
 
 on:
   schedule:
-    # arXiv RSS refreshes around midnight US Eastern (13:00–14:00 KST).
-    # 06:07 UTC = 15:07 KST, Mon–Fri. arXiv publishes nothing on weekends.
-    - cron: "7 6 * * 1-5"
+    # arXiv RSS refreshes around midnight US Eastern (13:00–14:00 KST) and is
+    # sometimes late. Times are UTC (KST = UTC+9). Mon–Fri only: arXiv publishes
+    # nothing on weekends.
+    - cron: "3 5 * * 1-5"    # 14:03 KST  main run
+    - cron: "3 7 * * 1-5"    # 16:03 KST  catch-up: if the feed was late, picks up
+                             #            today's papers; otherwise finds nothing
+                             #            new and exits without cost or posts
   workflow_dispatch:          # "Run workflow" button for manual runs
     inputs:
       mode:
