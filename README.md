@@ -76,8 +76,10 @@ Go to the **Actions** tab → **daily-arxiv-digest** → **Run workflow**.
 Tick *dry run* the first time; the digest appears on the run's summary page.
 Then run it once without dry run and check Discord and the Sheet.
 
-After that it runs on its own **Mon–Fri at about 15:07 KST**, shortly after arXiv's daily
-feed refresh. GitHub sometimes starts scheduled runs a few minutes late.
+After that it runs on its own **Mon–Fri at about 14:03 KST**, shortly after arXiv's daily
+feed refresh, with a **catch-up run at about 16:03 KST** in case the feed was late.
+The catch-up run only processes papers the first run didn't see, so on normal days it
+finds nothing and exits quietly. GitHub sometimes starts scheduled runs 5–30 minutes late.
 
 ---
 
