@@ -169,13 +169,8 @@ def to_sheets(papers: list[Paper], date: str, cfg: dict) -> None:
                                "rule": {"condition": {"type": "ONE_OF_LIST", "values": [
                                    {"userEnteredValue": str(i)} for i in range(1, 6)]},
                                         "showCustomUi": True, "strict": True}}},
-        # new rows must not inherit the header's bold/blue style
-        {"repeatCell": {"range": _grid(ws, 0, r0, r1, len(SHEET_HEADER)),
-                        "cell": {"userEnteredFormat": {"textFormat": {"bold": False},
-                                 "backgroundColor": {"red": 1, "green": 1, "blue": 1},
-                                 "wrapStrategy": "CLIP", "verticalAlignment": "TOP"}},
-                        "fields": "userEnteredFormat(textFormat.bold,backgroundColor,"
-                                  "wrapStrategy,verticalAlignment)"}},
+        # (no font/colour override: new rows copy the style of the row below,
+        #  so your own fonts, colours and alternating colours carry over)
         # thin line above the new day so days are easy to tell apart
         {"updateBorders": {"range": _grid(ws, 0, r1 - 1, r1, len(SHEET_HEADER)),
                            "bottom": {"style": "SOLID_MEDIUM",
