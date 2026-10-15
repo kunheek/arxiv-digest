@@ -11,22 +11,18 @@ announce_types: [new, cross]
 # Describe your interests in plain language. This is the single most
 # important setting: Claude scores every abstract against it.
 interest_profile: |
-  I am a PhD student working on 3D/4D reconstruction and video diffusion transformers.
-  Core interests (score high):
-  - 3D/4D reconstruction from video, multi-view, or single-view (NeRF, meshes,
-    voxel grids, implicit surfaces, dynamic scene reconstruction)
-  - Feed-forward / generalizable 3D and 4D reconstruction (DUSt3R / MASt3R / VGGT line,
-    pointmap regression, dynamic scene reconstruction, 4D Gaussian splatting)
-  - Efficient inference for video diffusion transformers: sparse / sliding-window / linear attention, token pruning or merging
+  My research interests are in world models in general, and 3D/4D reconstruction and video diffusion transformers in particular.
+  I am also interested in deep learning architectures (i.e., transformers), optimization and Bayesian methods, and probabilistic generative models.
+  I am not interested in medical imaging, remote sensing, pure NLP/LLM papers, adversarial robustness, or federated learning, unless they clearly touch the above.
+  Core interests:
+  - Both optimization-based and feed-forward 3D/4D reconstruction
+  - Efficient inference for video diffusion transformers
   - Video generation with 3D/4D consistency, camera control, world models
-  Adjacent interests (score medium):
-  - Novel view synthesis, NeRF/3DGS efficiency, SLAM with learned priors
-  - Diffusion model theory and sampling acceleration in general
-  - Efficient transformers / attention kernels
-  - Optimization for deep learning
-  - Bayesian deep learning and probabilistic generative models
-  Not interested (score low): medical imaging, remote sensing, pure NLP/LLM papers,
-  adversarial robustness, federated learning, unless they clearly touch the above.
+  - New architectures, such as linear and sparse attention
+  Secondary interests (for inspiration and context):
+  - Probabilistic generative models, including diffusion and score-based models
+  - Optimization for deep learning (e.g., MUON)
+  - Bayesian methods, including MCMC and variational inference
 
 # Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
 seed_papers:
