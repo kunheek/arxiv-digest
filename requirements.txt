@@ -1,0 +1,6 @@
+anthropic>=1.13
+requests>=2.31
+beautifulsoup4>=4.12
+pyyaml>=6.0
+gspread>=6.0
+google-auth>=2.0

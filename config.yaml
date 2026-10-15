@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────
+#  arXiv daily digest — edit this file to tune your recommendations
+# ─────────────────────────────────────────────────────────────
+
+categories: [cs.CV, cs.CG, cs.LG, stat.ML]
+
+# "new" = first appearance, "cross" = cross-listed into one of your categories.
+# Add "replace" / "replace-cross" to also see updated versions (noisy).
+announce_types: [new, cross]
+
+# Describe your interests in plain language. This is the single most
+# important setting: Claude scores every abstract against it.
+interest_profile: |
+  I am a PhD student working on inference-time methods for 3D/4D reconstruction
+  and video diffusion transformers.
+  Core interests (score high):
+  - Feed-forward / generalizable 3D and 4D reconstruction (DUSt3R / MASt3R / VGGT line,
+    pointmap regression, dynamic scene reconstruction, 4D Gaussian splatting)
+  - Efficient inference for video diffusion transformers: feature/attention caching,
+    sparse / sliding-window / linear attention, token pruning or merging,
+    step distillation, quantization, parallel/distributed inference
+  - Video generation with 3D/4D consistency, camera control, world models
+  Adjacent interests (score medium):
+  - Novel view synthesis, NeRF/3DGS efficiency, SLAM with learned priors
+  - Diffusion model theory and sampling acceleration in general
+  - Efficient transformers / attention kernels
+  Not interested (score low): medical imaging, remote sensing, pure NLP/LLM papers,
+  adversarial robustness, federated learning, unless they clearly touch the above.
+
+# Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
+seed_papers:
+  - "VGGT: Visual Geometry Grounded Transformer"
+  - "DUSt3R: Geometric 3D Vision Made Easy"
+  - "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering"
+  - "Sparse VideoGen: Accelerating Video Diffusion Transformers with Spatial-Temporal Sparsity"
+  - "Timestep Embedding Tells: It's Time to Cache for Video Diffusion Model"   # TeaCache
+
+# Researchers whose new papers you never want to miss (matched against author lists).
+# Use the name exactly as it appears on arXiv.
+watch_authors:
+  - Angjoo Kanazawa
+  - Song Han
+  - Saining Xie
+  - Kaiming He
+
+# Institutions / labs (matched case-insensitively against affiliations
+# extracted from the paper's arXiv HTML page). Aliases help matching.
+watch_institutions:
+  - Stanford
+  - "Massachusetts Institute of Technology|MIT"
+  - "UC Berkeley|University of California, Berkeley"
+  - Carnegie Mellon
+  - "University of Oxford|Oxford"
+  - "ETH Zurich|ETH Zürich"
+  - "Max Planck"
+  - "Google DeepMind|Google Research|Google"
+  - "Meta|FAIR"
+  - NVIDIA
+  - "ByteDance|Seed"
+  - "Alibaba|Tongyi"
+
+ranking:
+  author_bonus: 3.0        # added if any watched author is on the paper
+  institution_bonus: 1.5   # added if any watched institution appears
+  min_interest_for_bonus: 4 # watched-group bonus only applies if interest >= this (0-10)
+
+limits:
+  enrich_top_n: 40         # fetch arXiv HTML (affiliations + intro) for this many candidates
+  summarize_top_k: 15      # Sonnet summaries for the final top K
+  discord_top_k: 10        # how many to post to Discord
+  sheets_min_interest: 3   # write papers scoring >= this to Google Sheets (0 = everything)
+
+models:
+  scorer: claude-haiku-5-5      # cheap, scores every abstract
+  summarizer: claude-sonnet-5-5 # summarizes the shortlist
+  score_batch_size: 20          # abstracts per scoring call
+
+feedback:
+  # Read the "my rating" column (1-5) from the Sheet and feed your
+  # highly-rated papers back into the profile as positive examples.
+  enabled: true
+  min_rating: 4
+  max_examples: 30
+
+delivery:
+  discord: true
+  sheets: true
+  sheet_worksheet: papers
