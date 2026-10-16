@@ -38,6 +38,47 @@ def match_institutions(p: Paper, watch: list[str]) -> None:
     p.inst_hits = hits
 
 
+_NOISE = re.compile(r"equal contribution|corresponding|project lead|work done|^\W*$|@|^email|"
+                   r"^\W*(?:\d+|[*†‡§¶])\W*$", re.I)
+
+
+def _split(text: str) -> list[str]:
+    """Affiliations that share one element are separated by runs of whitespace/newlines."""
+    return [" ".join(t.split()) for t in re.split(r"\s{2,}|\n", text)]
+
+
+def parse_affiliations(soup: BeautifulSoup, authors: list[str] = ()) -> list[str]:
+    """Institution names from an arXiv HTML page, or [] if they can't be told apart
+    from author names (better nothing than a pasted author block)."""
+    block = soup.select_one(".ltx_authors")
+    if not block:
+        return []
+    raw = []
+    contacts = block.select(".ltx_contact.ltx_role_affiliation")
+    if contacts:
+        for el in contacts:
+            for lab in el.select(".ltx_contact_name"):
+                lab.decompose()
+            raw += _split(el.get_text())
+    else:
+        # affiliations typed as plain text under the names: drop names (bold), footnote
+        # marks and notes, and keep what's left
+        block = BeautifulSoup(str(block), "html.parser")
+        for el in block.select(".ltx_font_bold, sup, .ltx_note, .ltx_tag"):
+            el.decompose()
+        raw = _split(block.get_text())
+    names = {_norm(a) for a in authors if _norm(a)}
+    out = []
+    for t in raw:
+        t = t.strip(" ,;*†‡§¶0123456789")
+        if len(t) < 3 or len(t) > 150 or _NOISE.search(t) or _norm(t) in names:
+            continue
+        if any(n and n in _norm(t) for n in names):      # contains an author name
+            continue
+        out.append(t)
+    return list(dict.fromkeys(out))[:20]
+
+
 def fetch_html(p: Paper, max_intro_chars: int = 6000) -> None:
     """Pull affiliations and the introduction. Not every paper has an HTML version."""
     try:
@@ -48,13 +89,7 @@ def fetch_html(p: Paper, max_intro_chars: int = 6000) -> None:
         return
     soup = BeautifulSoup(r.text, "html.parser")
 
-    authors_block = soup.select_one(".ltx_authors")
-    if authors_block:
-        affs = [" ".join(el.get_text(" ").split())
-                for el in authors_block.select(".ltx_contact, .ltx_role_affiliation, .ltx_affiliation")]
-        if not affs:  # many templates just put affiliations as plain text in the block
-            affs = [" ".join(authors_block.get_text(" ").split())]
-        p.affiliations = list(dict.fromkeys(a for a in affs if a))[:20]
+    p.affiliations = parse_affiliations(soup, p.authors)
 
     first = soup.select_one("section.ltx_section")
     if first:

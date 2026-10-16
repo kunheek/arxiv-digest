@@ -63,6 +63,8 @@ limits:
   summarize_top_k: 15      # Sonnet summaries for the final top K
   discord_top_k: 10        # how many to post to Discord
   sheets_min_interest: 3   # write papers scoring >= this to Google Sheets (0 = everything)
+  db_min_interest: 0       # keep papers scoring >= this in data/digest.db (0 = every scored paper, ~1 MB/day)
+  site_min_interest: 3     # show papers scoring >= this on the website (keeps the site index small)
 
 models:
   scorer: claude-haiku-5-5      # cheap, scores every abstract

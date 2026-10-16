@@ -30,7 +30,8 @@ from digest.summarize import summarize
 
 def build_site(con, cfg: dict, publish_it: bool = True) -> None:
     d = cfg["delivery"]
-    n = site.build(con, "site", d.get("site_title", "arXiv digest"))
+    n = site.build(con, "site", d.get("site_title", "arXiv digest"),
+                   cfg["limits"].get("site_min_interest", 3))
     print(f"    built site/ with {n} papers")
     if publish_it and d.get("publish"):
         try:
@@ -147,7 +148,7 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
 
     if not args.dry_run:
         con = db.connect(args.db)
-        db.upsert(con, [p for p in ranked if p.interest >= cfg["limits"]["sheets_min_interest"]],
+        db.upsert(con, [p for p in ranked if p.interest >= cfg["limits"].get("db_min_interest", 0)],
                   today, stats)
         if cfg["delivery"].get("site"):
             build_site(con, cfg)

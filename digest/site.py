@@ -22,8 +22,8 @@ def _dump(path: str, obj) -> None:
         json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def build(con, out: str = "site", title: str = "arXiv digest") -> int:
-    papers = db.all_papers(con)
+def build(con, out: str = "site", title: str = "arXiv digest", min_interest: float = 0) -> int:
+    papers = [p for p in db.all_papers(con) if p["interest"] >= min_interest]
     days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
     if os.path.isdir(out):
         shutil.rmtree(out)

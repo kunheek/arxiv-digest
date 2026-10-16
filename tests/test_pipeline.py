@@ -236,3 +236,24 @@ def test_env_file(tmp_path, monkeypatch):
     assert os.environ["SHEET_ID"] == "abc"
     assert json.loads(os.environ["GOOGLE_CREDS"])["client_email"].startswith("bot@")
     assert os.environ["DISCORD_WEBHOOK"] == "from-shell"
+
+
+def test_parse_affiliations():
+    from bs4 import BeautifulSoup
+    from digest.enrich import parse_affiliations
+    contact = BeautifulSoup(
+        '<div class="ltx_authors"><span class="ltx_creator"><span class="ltx_personname">A B</span>'
+        '<span class="ltx_contact ltx_role_affiliation"><span class="ltx_contact_name">Affiliation: </span>'
+        'Shanghai AI Laboratory  Beihang University\n</span>'
+        '<span class="ltx_contact ltx_role_email"><span class="ltx_contact_name">Email: </span>a@b.c</span>'
+        '</span></div>', "html.parser")
+    assert parse_affiliations(contact, ["A B"]) == ["Shanghai AI Laboratory", "Beihang University"]
+    plain = BeautifulSoup(
+        '<div class="ltx_authors"><span class="ltx_personname"><span class="ltx_p">'
+        '<span class="ltx_font_bold">Yi Li<sup>1</sup>, Jo Ng<sup>2</sup></span>Cornell University\n'
+        '<sup>2</sup>University of Pennsylvania</span></span></div>', "html.parser")
+    assert parse_affiliations(plain, ["Yi Li", "Jo Ng"]) == ["Cornell University", "University of Pennsylvania"]
+    names_only = BeautifulSoup(
+        '<div class="ltx_authors"><span class="ltx_personname">Yi Li</span>'
+        '<span class="ltx_personname">Jo Ng</span></div>', "html.parser")
+    assert parse_affiliations(names_only, ["Yi Li", "Jo Ng"]) == []
