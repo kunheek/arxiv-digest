@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 import yaml
 
 from digest import deliver, state
+from digest.env import load_env
 from digest.enrich import enrich
 from digest.fetch import fetch_today
 from digest.llm import LLM
@@ -42,13 +43,15 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--results", default=deliver.RESULTS_DIR)
     args = ap.parse_args(argv)
 
+    load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
     today = dt.datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
 
     if args.sheets_only or args.reformat:
         if not (os.environ.get("GOOGLE_CREDS") and os.environ.get("SHEET_ID")):
-            print("ERROR: GOOGLE_CREDS and SHEET_ID must be set for Sheet-only modes.")
+            print("ERROR: GOOGLE_CREDS (or GOOGLE_CREDS_FILE) and SHEET_ID must be set "
+                  "for Sheet-only modes (in .env or the environment).")
             return 1
         if args.sheets_only:
             date, saved = deliver.load_results(args.date, args.results)
@@ -63,7 +66,7 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if not key:
             print("ERROR: ANTHROPIC_API_KEY is not set (or is empty).\n"
-                  "  • Mac: run  export ANTHROPIC_API_KEY=sk-ant-...  in the SAME terminal, then retry.\n"
+                  "  • Your machine: put  ANTHROPIC_API_KEY=sk-ant-...  in .env (see .env.example).\n"
                   "  • GitHub: Settings → Secrets and variables → Actions → Repository secrets,\n"
                   "    name exactly ANTHROPIC_API_KEY, value = just the key.")
             return 1

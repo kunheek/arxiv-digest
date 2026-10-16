@@ -83,6 +83,49 @@ finds nothing and exits quietly. GitHub sometimes starts scheduled runs 5–30 m
 
 ---
 
+## Running on your own Linux machine (instead of GitHub Actions)
+A systemd timer runs the digest **Mon–Fri at 14:03 and 16:03 KST**. The times are written
+in Korea time, whatever the machine's timezone. If the machine was off, the run happens
+at the next boot. Before each run it `git pull`s, so config edits you push from your
+laptop take effect. Failures are posted to your Discord channel.
+
+```bash
+# 1. get the code and a Python env (Python 3.9+)
+git clone https://github.com/kunheek/arxiv-digest.git ~/arxiv-digest
+cd ~/arxiv-digest
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# 2. secrets: copy the Google key here (from your laptop), then fill in .env
+mkdir -p ~/.config/arxiv-digest && chmod 700 ~/.config/arxiv-digest
+#   (on the laptop)  scp ~/code/arxiv-digest/arxiv-digest-*.json  linuxbox:~/.config/arxiv-digest/google-creds.json
+chmod 600 ~/.config/arxiv-digest/google-creds.json
+cp .env.example .env && chmod 600 .env && nano .env
+
+# 3. test (no Discord/Sheets, nothing saved)
+scripts/run_daily.sh --dry-run --max-papers 20 && tail -30 logs/*.log
+
+# 4. install the timer
+scripts/install_timer.sh
+```
+
+| Task | Command |
+|---|---|
+| Run now | `systemctl --user start arxiv-digest.service` |
+| Next scheduled runs | `systemctl --user list-timers arxiv-digest.timer` |
+| Logs | `tail -f logs/$(date +%Y-%m).log` |
+| Sheet-only modes | `scripts/run_daily.sh --reformat` / `--sheets-only` |
+| Uninstall timer | `scripts/install_timer.sh --remove` |
+
+**No systemd, or not allowed to enable lingering?** Use cron instead (`crontab -e`). This
+assumes the machine clock is KST; check with `date`:
+```
+3 14,16 * * 1-5  $HOME/arxiv-digest/scripts/run_daily.sh
+```
+
+**Turn off the GitHub schedule** so both don't run. Go to GitHub → **Actions →
+daily-arxiv-digest → ⋯ → Disable workflow**. Otherwise the bot keeps committing
+`state/seen.json`, which conflicts with the copy on your machine.
+
 ## Tuning
 Everything lives in `config.yaml`. Edit it on github.com and commit; the next run uses it.
 

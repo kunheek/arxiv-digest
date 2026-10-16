@@ -217,3 +217,20 @@ def test_tab_names():
     assert tab_name({"delivery": {"sheet_tabs": "yearly"}}, "2026-10-15") == "2026"
     assert tab_name({"delivery": {"sheet_tabs": "single", "sheet_worksheet": "papers"}},
                     "2026-10-15") == "papers"
+
+
+def test_env_file(tmp_path, monkeypatch):
+    from digest.env import load_env
+    key = tmp_path / "creds.json"
+    key.write_text('{"client_email": "bot@x.iam.gserviceaccount.com"}')
+    env = tmp_path / ".env"
+    env.write_text(f'# comment\nexport ANTHROPIC_API_KEY="sk-ant-test"\nSHEET_ID=abc\n'
+                   f"GOOGLE_CREDS_FILE={key}\nDISCORD_WEBHOOK=from-file\n")
+    for k in ["ANTHROPIC_API_KEY", "SHEET_ID", "GOOGLE_CREDS", "GOOGLE_CREDS_FILE"]:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("DISCORD_WEBHOOK", "from-shell")      # real env wins over .env
+    load_env(str(env))
+    assert os.environ["ANTHROPIC_API_KEY"] == "sk-ant-test"
+    assert os.environ["SHEET_ID"] == "abc"
+    assert json.loads(os.environ["GOOGLE_CREDS"])["client_email"].startswith("bot@")
+    assert os.environ["DISCORD_WEBHOOK"] == "from-shell"

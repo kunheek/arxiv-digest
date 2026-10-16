@@ -7,3 +7,6 @@ google-creds.json
 
 # service-account keys and other secrets in the project root (state/seen.json is still tracked)
 /*.json
+
+# local run logs
+logs/
