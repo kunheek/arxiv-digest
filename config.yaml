@@ -79,6 +79,10 @@ feedback:
 delivery:
   discord: true
   sheets: true
+  site: true                 # keep data/digest.db and build the website in site/
+  publish: true              # push site/ to the gh-pages branch (GitHub Pages)
+  publish_branch: gh-pages
+  site_title: arXiv digest
   # Sheet tabs: monthly → one tab per month ("2026-10", newest first)
   #             yearly  → one tab per year ("2026")
   #             single  → everything in the tab named by sheet_worksheet

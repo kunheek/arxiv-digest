@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Daily entry point on your own Linux machine (called by the systemd timer).
+# Daily entry point on your own Linux machine (called by cron).
 #   - pulls config changes you pushed from elsewhere (AUTO_PULL=1)
 #   - runs the digest inside the project's .venv
 #   - logs to logs/YYYY-MM.log

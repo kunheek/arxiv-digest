@@ -10,3 +10,8 @@ google-creds.json
 
 # local run logs
 logs/
+
+# local database and generated site
+data/
+site/
+results/

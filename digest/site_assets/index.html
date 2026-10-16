@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <a class="brand" href="#/">{{TITLE}}</a>
+  <input id="q" type="search" placeholder="Search title, author, tag…" autocomplete="off">
+  <select id="min" title="Minimum score">
+    <option value="0">all scores</option><option value="5">≥ 5</option>
+    <option value="7">≥ 7</option><option value="9">≥ 9</option>
+  </select>
+</header>
+<main id="main">Loading…</main>
+<script src="app.js"></script>
+</body>
+</html>

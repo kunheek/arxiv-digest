@@ -84,10 +84,10 @@ finds nothing and exits quietly. GitHub sometimes starts scheduled runs 5–30 m
 ---
 
 ## Running on your own Linux machine (instead of GitHub Actions)
-A systemd timer runs the digest **Mon–Fri at 14:03 and 16:03 KST**. The times are written
-in Korea time, whatever the machine's timezone. If the machine was off, the run happens
-at the next boot. Before each run it `git pull`s, so config edits you push from your
-laptop take effect. Failures are posted to your Discord channel.
+A cron job runs the digest **Mon–Fri at 14:03 and 16:03 KST** (the machine clock must be
+KST; the installer checks). Before each run it `git pull`s, so config edits you push from
+your laptop take effect. Failures are posted to your Discord channel. Cron does not catch
+up on runs missed while the machine was off.
 
 ```bash
 # 1. get the code and a Python env (Python 3.9+)
@@ -104,23 +104,35 @@ cp .env.example .env && chmod 600 .env && nano .env
 # 3. test (no Discord/Sheets, nothing saved)
 scripts/run_daily.sh --dry-run --max-papers 20 && tail -30 logs/*.log
 
-# 4. install the timer
-scripts/install_timer.sh
+# 4. install the cron job
+scripts/install_cron.sh
 ```
 
 | Task | Command |
 |---|---|
-| Run now | `systemctl --user start arxiv-digest.service` |
-| Next scheduled runs | `systemctl --user list-timers arxiv-digest.timer` |
+| Run now | `scripts/run_daily.sh` |
+| Show schedule | `crontab -l` |
 | Logs | `tail -f logs/$(date +%Y-%m).log` |
 | Sheet-only modes | `scripts/run_daily.sh --reformat` / `--sheets-only` |
-| Uninstall timer | `scripts/install_timer.sh --remove` |
+| Uninstall | `scripts/install_cron.sh --remove` |
 
-**No systemd, or not allowed to enable lingering?** Use cron instead (`crontab -e`). This
-assumes the machine clock is KST; check with `date`:
+### Database and website
+Every run stores the scored papers (those at or above `sheets_min_interest`) in
+`data/digest.db` (SQLite, local, git-ignored; back it up if you care about the history).
+Then it builds a static site in `site/` and force-pushes it as a single commit to the
+`gh-pages` branch. Controlled by `delivery.site` / `delivery.publish` in `config.yaml`.
+
+One-time: push the repo, then GitHub → Settings → Pages → Source: *Deploy from a branch*,
+branch `gh-pages`, folder `/ (root)`. The site is public unless your plan supports private Pages.
+
+```bash
+.venv/bin/python run.py --import-results      # backfill DB from results/*.json
+.venv/bin/python run.py --site-only --no-publish   # rebuild site/ only
+.venv/bin/python run.py --site-only                # rebuild and publish
+cd site && python3 -m http.server                  # preview locally
 ```
-3 14,16 * * 1-5  $HOME/arxiv-digest/scripts/run_daily.sh
-```
+The site stays fast with thousands of papers: visitors load one small index plus the
+month shard they look at; search runs in the browser.
 
 **Turn off the GitHub schedule** so both don't run. Go to GitHub → **Actions →
 daily-arxiv-digest → ⋯ → Disable workflow**. Otherwise the bot keeps committing

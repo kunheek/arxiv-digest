@@ -19,13 +19,25 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
-from digest import deliver, state
+from digest import db, deliver, publish, site, state
 from digest.env import load_env
 from digest.enrich import enrich
 from digest.fetch import fetch_today
 from digest.llm import LLM
 from digest.score import score_all
 from digest.summarize import summarize
+
+
+def build_site(con, cfg: dict, publish_it: bool = True) -> None:
+    d = cfg["delivery"]
+    n = site.build(con, "site", d.get("site_title", "arXiv digest"))
+    print(f"    built site/ with {n} papers")
+    if publish_it and d.get("publish"):
+        try:
+            publish.publish("site", d.get("publish_branch", "gh-pages"))
+            print("    published to GitHub Pages")
+        except Exception as e:      # never fail the digest because of the website
+            print(f"    WARNING: publish failed: {getattr(e, 'stderr', None) or e}")
 
 
 def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
@@ -41,12 +53,27 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--date", help="YYYY-MM-DD: day for --sheets-only (default: latest saved) "
                                    "or month tab for --reformat (default: today)")
     ap.add_argument("--results", default=deliver.RESULTS_DIR)
+    ap.add_argument("--db", default=db.DB_PATH)
+    ap.add_argument("--site-only", action="store_true",
+                    help="rebuild the website from the database (and publish it); free")
+    ap.add_argument("--no-publish", action="store_true",
+                    help="with --site-only: build site/ but don't push to GitHub Pages")
+    ap.add_argument("--import-results", action="store_true",
+                    help="load results/*.json into the database")
     args = ap.parse_args(argv)
 
     load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
     today = dt.datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+
+    if args.import_results or args.site_only:
+        con = db.connect(args.db)
+        if args.import_results:
+            print(f"imported {db.import_results(con, args.results)} papers into {args.db}")
+        if args.site_only:
+            build_site(con, cfg, publish_it=not args.no_publish)
+        return 0
 
     if args.sheets_only or args.reformat:
         if not (os.environ.get("GOOGLE_CREDS") and os.environ.get("SHEET_ID")):
@@ -119,6 +146,11 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         print(f"    wrote {len(keep)} rows to Google Sheets")
 
     if not args.dry_run:
+        con = db.connect(args.db)
+        db.upsert(con, [p for p in ranked if p.interest >= cfg["limits"]["sheets_min_interest"]],
+                  today, stats)
+        if cfg["delivery"].get("site"):
+            build_site(con, cfg)
         seen.update({p.id: today for p in papers})
         state.save(args.state, seen, today)
     return 0
