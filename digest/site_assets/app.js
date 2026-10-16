@@ -1,70 +1,84 @@
 "use strict";
 const $ = (s) => document.querySelector(s), main = $("#main");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let DATA, byDate = {}, shards = {};
-const PAGE = 100;
+const PAGE = 50;
+let DATA, byDate = {}, dates = [], shards = {};
 
-async function shard(month) {
-  if (!shards[month]) shards[month] = fetch(`data/${month}.json`).then((r) => r.json());
-  return shards[month];
-}
-const cls = (s) => (s >= 9 ? "hi" : s >= 7 ? "mid" : "");
+const shard = (m) => (shards[m] ||= fetch(`data/${m}.json`).then((r) => r.json()).catch(() => ({})));
+const cls = (s) => (s >= 8 ? "hi" : s >= 6 ? "mid" : "");
+const fmtDate = (d) => new Date(d + "T00:00:00").toLocaleDateString(undefined, {weekday: "long", year: "numeric", month: "long", day: "numeric"});
 
-function card(row, open) {
-  const [id, date, title, score, interest, tags, authors, watch] = row;
-  const au = authors.join(", ") + (authors.length >= 6 ? " et al." : "");
-  return `<article class="p" data-id="${id}" data-month="${date.slice(0, 7)}">
-    <h3><span class="sc ${cls(score)}">${+score.toFixed(1)}</span>${watch ? "⭐ " : ""}<a href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${esc(title)}</a></h3>
-    <div class="meta">${esc(au)} · <a href="#/day/${date}">${date}</a></div>
-    <div>${tags.map((t) => `<span class="tag" data-tag="${esc(t)}">${esc(t)}</span>`).join("")}</div>
-    <div class="det"></div></article>`;
+function authors(list, more) {
+  const n = 5, head = list.slice(0, n).map(esc).join(", ");
+  return head + (list.length > n ? ` <span title="${esc(list.slice(n).join(", "))}">+${list.length - n} more</span>` : "");
 }
 
-async function fillDetails(root) {
-  for (const el of root.querySelectorAll(".p")) {
-    const d = (await shard(el.dataset.month))[el.dataset.id];
-    if (!d) continue;
-    const badges = [d.ah.length ? "👤 " + d.ah.join(", ") : "", d.ih.length ? "🏛 " + d.ih.slice(0, 3).join(", ") : "",
-      d.code ? `<a href="${esc(d.code)}" target="_blank" rel="noopener">💻 code</a>` : ""].filter(Boolean).join(" · ");
-    el.querySelector(".det").innerHTML =
-      (d.tldr ? `<p><b>TL;DR</b> ${esc(d.tldr)}</p>` : "") + (d.why ? `<p><b>Why you</b> ${esc(d.why)}</p>` : "") +
-      (badges ? `<p class="meta">${badges}</p>` : "") +
-      `<details><summary class="meta">abstract</summary><p>${esc(d.abs)}</p></details>`;
-  }
+function card(row, d, showDate) {
+  const [id, date, title, score, , tags, , watch] = row;
+  d = d || {};
+  const badges = [
+    d.ah?.length ? `<span class="badge">👤 ${d.ah.map(esc).join(", ")}</span>` : "",
+    d.ih?.length ? `<span class="badge">🏛 ${d.ih.slice(0, 3).map(esc).join(", ")}</span>` : "",
+    d.code ? `<a class="badge code" href="${esc(d.code)}" target="_blank" rel="noopener">code ↗</a>` : "",
+  ].join("");
+  return `<article class="p">
+    <div class="top"><div class="sc ${cls(score)}" title="score">${score.toFixed(1)}</div><div>
+      <h3><a href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${esc(title)}</a></h3>
+      <div class="meta">${authors(d.au || row[6])}</div>
+      <div class="meta">arXiv:${id}${d.cat ? " · " + d.cat.slice(0, 3).map(esc).join(", ") : ""}${showDate ? ` · <a href="#/day/${date}">${date}</a>` : ""}</div>
+    </div></div>
+    <div class="body">
+      ${d.tldr ? `<p class="tldr">${esc(d.tldr)}</p>` : ""}
+      ${d.why ? `<p class="why"><b>Why you</b>${esc(d.why)}</p>` : ""}
+      <div class="chips">${badges}${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+      ${d.abs ? `<details><summary>Abstract</summary><p>${esc(d.abs)}</p></details>` : ""}
+    </div></article>`;
 }
 
-function list(rows, limit) {
+async function render(rows, limit, showDate, split) {
   const shown = rows.slice(0, limit);
-  main.querySelector("#list").innerHTML = shown.map((r) => card(r)).join("") || "<p class=meta>Nothing found.</p>";
-  const more = main.querySelector("#more");
+  const months = [...new Set(shown.map((r) => r[1].slice(0, 7)))];
+  await Promise.all(months.map(shard));
+  let html = "", last = null;
+  for (const r of shown) {
+    if (split) {
+      const g = r[3] >= 7 ? "Top picks" : "Also scored";
+      if (g !== last) html += `<div class="sect">${g}</div>`;
+      last = g;
+    }
+    html += card(r, (await shard(r[1].slice(0, 7)))[r[0]], showDate);
+  }
+  $("#list").innerHTML = html || '<p class="empty">Nothing found.</p>';
+  const more = $("#more");
   more.hidden = rows.length <= limit;
   more.textContent = `Show more (${rows.length - limit} left)`;
-  more.onclick = () => list(rows, limit + PAGE);
-  if (shown.length <= PAGE * 2) fillDetails(main.querySelector("#list"));
+  more.onclick = () => render(rows, limit + PAGE, showDate, split);
 }
 
 function view() {
   const q = $("#q").value.trim().toLowerCase(), min = +$("#min").value;
-  const hash = location.hash.replace(/^#/, "") || "/";
-  const dates = Object.keys(byDate).sort().reverse();
-  const m = hash.match(/^\/day\/(\d{4}-\d{2}-\d{2})/);
-  const date = m ? m[1] : dates[0];
   if (q || min) {
     const terms = q.split(/\s+/).filter(Boolean);
     const rows = DATA.papers.filter((r) => r[3] >= min && terms.every((t) =>
       (r[2] + " " + r[5].join(" ") + " " + r[6].join(" ") + " " + r[0]).toLowerCase().includes(t)))
       .sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : b[3] - a[3]));
-    main.innerHTML = `<h2>${rows.length} result${rows.length === 1 ? "" : "s"}</h2><div id="list"></div><button id="more" class="more"></button>`;
-    return list(rows, PAGE);
+    main.innerHTML = `<div class="dayhead"><h1>${rows.length} result${rows.length === 1 ? "" : "s"}</h1>
+      <a class="btn" href="#/">Clear</a></div><div id="list"></div><button id="more" class="more" hidden></button>`;
+    return render(rows, PAGE, true, false);
   }
-  if (!date) { main.innerHTML = "<p>No papers yet.</p>"; return; }
-  const i = dates.indexOf(date), rows = (byDate[date] || []).slice().sort((a, b) => b[3] - a[3]);
+  if (!dates.length) { main.innerHTML = '<p class="empty">No papers yet.</p>'; return; }
+  const m = location.hash.match(/^#\/day\/(\d{4}-\d{2}-\d{2})/);
+  const date = m && byDate[m[1]] ? m[1] : dates[0], i = dates.indexOf(date);
+  const rows = byDate[date].slice().sort((a, b) => b[3] - a[3]);
   const total = DATA.days[date]?.total;
-  main.innerHTML = `<div class="nav"><span>${dates[i + 1] ? `<a href="#/day/${dates[i + 1]}">← ${dates[i + 1]}</a>` : ""}</span>
-    <span>${dates[i - 1] ? `<a href="#/day/${dates[i - 1]}">${dates[i - 1]} →</a>` : ""}</span></div>
-    <h2>${date} <span class="meta">· ${rows.length} papers${total ? ` of ${total} scanned` : ""}</span></h2>
-    <div id="list"></div><button id="more" class="more"></button>`;
-  list(rows, PAGE);
+  main.innerHTML = `<div class="dayhead"><div><h1>${fmtDate(date)}</h1>
+    <div class="sub">${rows.length} papers${total ? ` kept from ${total} scanned` : ""}</div></div>
+    <div class="nav">${dates[i + 1] ? `<a class="btn" href="#/day/${dates[i + 1]}">← Older</a>` : ""}
+    <select id="jump" aria-label="Jump to day">${dates.map((d) => `<option ${d === date ? "selected" : ""}>${d}</option>`).join("")}</select>
+    ${dates[i - 1] ? `<a class="btn" href="#/day/${dates[i - 1]}">Newer →</a>` : ""}</div></div>
+    <div id="list"></div><button id="more" class="more" hidden></button>`;
+  $("#jump").onchange = (e) => (location.hash = `#/day/${e.target.value}`);
+  render(rows, PAGE, false, true);
 }
 
 main.addEventListener("click", (e) => {
@@ -78,5 +92,6 @@ window.addEventListener("hashchange", () => { $("#q").value = ""; $("#min").valu
 fetch("data/index.json").then((r) => r.json()).then((d) => {
   DATA = d;
   for (const r of d.papers) (byDate[r[1]] ||= []).push(r);
+  dates = Object.keys(byDate).sort().reverse();
   view();
 }).catch((e) => { main.textContent = "Failed to load data: " + e; });

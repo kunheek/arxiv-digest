@@ -7,14 +7,14 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
+<header><div class="bar">
   <a class="brand" href="#/">{{TITLE}}</a>
-  <input id="q" type="search" placeholder="Search title, author, tag…" autocomplete="off">
-  <select id="min" title="Minimum score">
-    <option value="0">all scores</option><option value="5">≥ 5</option>
-    <option value="7">≥ 7</option><option value="9">≥ 9</option>
+  <input id="q" type="search" placeholder="Search title, author, tag…" autocomplete="off" aria-label="Search">
+  <select id="min" aria-label="Minimum score">
+    <option value="0">All scores</option><option value="5">Score ≥ 5</option>
+    <option value="7">Score ≥ 7</option><option value="9">Score ≥ 9</option>
   </select>
-</header>
+</div></header>
 <main id="main">Loading…</main>
 <script src="app.js"></script>
 </body>

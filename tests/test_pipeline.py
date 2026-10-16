@@ -105,9 +105,11 @@ def test_end_to_end(tmp_path, monkeypatch):
     cfg = yaml.safe_load(open("config.yaml"))
     cfg["watch_authors"] = ["Andrea Vedaldi"]
     cfg["watch_institutions"] = ["University of Oxford|Oxford"]
+    cfg["delivery"].update(site=False, publish=False, sheets=False, discord=False)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
-    args = ["--state", str(state), "--config", str(cfg_path), "--results", str(tmp_path / "results")]
+    args = ["--state", str(state), "--config", str(cfg_path), "--results", str(tmp_path / "results"),
+            "--db", str(tmp_path / "digest.db")]
     assert run.main(args, llm=llm, fetcher=fetcher) == 0
 
     out = md.read_text()
