@@ -1,4 +1,5 @@
 """Remember which papers were already processed (GitHub runners have no memory)."""
+
 from __future__ import annotations
 
 import datetime as dt

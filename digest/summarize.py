@@ -1,4 +1,5 @@
 """Stage 3: short, personalised summaries of the final top-K."""
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -26,9 +27,13 @@ Given a paper's abstract and introduction, return:
 
 SCHEMA = {
     "type": "object",
-    "properties": {"tldr": {"type": "string"}, "why": {"type": "string"},
-                   "quality": {"type": "number"}, "quality_note": {"type": "string"},
-                   "impact": {"type": "number"}},
+    "properties": {
+        "tldr": {"type": "string"},
+        "why": {"type": "string"},
+        "quality": {"type": "number"},
+        "quality_note": {"type": "string"},
+        "impact": {"type": "number"},
+    },
     "required": ["tldr", "why", "quality", "quality_note", "impact"],
     "additionalProperties": False,
 }
@@ -39,12 +44,14 @@ def summarize(papers: list[Paper], cfg: dict, llm: LLM) -> None:
     model = cfg["models"]["summarizer"]
 
     def run(p: Paper):
-        user = (f"Title: {p.title}\nAuthors: {', '.join(p.authors[:15])}\n\n"
-                f"Abstract: {p.abstract}\n\nIntroduction (truncated): {p.intro or '(not available)'}")
+        user = (
+            f"Title: {p.title}\nAuthors: {', '.join(p.authors[:15])}\n\n"
+            f"Abstract: {p.abstract}\n\nIntroduction (truncated): {p.intro or '(not available)'}"
+        )
         try:
             out = llm.ask_structured(model, system, user, SCHEMA, max_tokens=600)
             p.tldr, p.why = out.get("tldr", ""), out.get("why", "")
-            if "quality" in out:      # better informed than the abstract-only score
+            if "quality" in out:  # better informed than the abstract-only score
                 p.quality = max(0.0, min(10.0, float(out["quality"])))
                 p.quality_note = out.get("quality_note", p.quality_note)
             if "impact" in out:

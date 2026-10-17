@@ -1,4 +1,5 @@
 """Delivery: Discord webhook and a local markdown file."""
+
 from __future__ import annotations
 
 import time
@@ -22,9 +23,11 @@ def _badges(p: Paper) -> str:
 # ── Discord ────────────────────────────────────────────────────
 def to_discord(date: str, stats: dict, webhook: str, url: str = "") -> None:
     """One short "digest updated" message; the papers themselves live on the website."""
-    lines = [f"📚 **arXiv digest updated** — {date}",
-             f"Scanned **{stats['total']}** papers · **{stats.get('on_site', 0)}** on the site"
-             f" · **{stats.get('top', 0)}** top picks"]
+    lines = [
+        f"📚 **arXiv digest updated** — {date}",
+        f"Scanned **{stats['total']}** papers · **{stats.get('on_site', 0)}** on the site"
+        f" · **{stats.get('top', 0)}** top picks",
+    ]
     if url:
         lines.append(f"<{url}>")
     for _ in range(3):
@@ -38,13 +41,18 @@ def to_discord(date: str, stats: dict, webhook: str, url: str = "") -> None:
 
 # ── Markdown (always written; handy for dry runs) ──
 def to_markdown(papers: list[Paper], date: str, stats: dict, path: str) -> None:
-    lines = [f"# arXiv digest — {date}",
-             f"Scanned {stats['total']} papers · {stats['calls']} Claude calls · cost ≈ ${stats['cost']:.3f}\n"]
+    lines = [
+        f"# arXiv digest — {date}",
+        f"Scanned {stats['total']} papers · {stats['calls']} Claude calls · cost ≈ ${stats['cost']:.3f}\n",
+    ]
     for i, p in enumerate(papers, 1):
-        lines += [f"## {i}. [{p.title}]({p.link})",
-                  f"*score {p.final:g} (interest {p.interest:g}) · {', '.join(p.tags)}*  ",
-                  f"{', '.join(p.authors[:8])}{' et al.' if len(p.authors) > 8 else ''}  ",
-                  f"{_badges(p)}\n" if _badges(p) else "",
-                  f"**TL;DR** {p.tldr}  ", f"**Why you** {p.why}\n"]
+        lines += [
+            f"## {i}. [{p.title}]({p.link})",
+            f"*score {p.final:g} (interest {p.interest:g}) · {', '.join(p.tags)}*  ",
+            f"{', '.join(p.authors[:8])}{' et al.' if len(p.authors) > 8 else ''}  ",
+            f"{_badges(p)}\n" if _badges(p) else "",
+            f"**TL;DR** {p.tldr}  ",
+            f"**Why you** {p.why}\n",
+        ]
     with open(path, "w") as f:
         f.write("\n".join(lines))

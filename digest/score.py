@@ -1,4 +1,5 @@
 """Stage 1: score every abstract for relevance AND quality with a cheap model."""
+
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -49,17 +50,39 @@ SCHEMA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "id": {"type": "string", "description": "arXiv id exactly as given"},
-                    "score": {"type": "number", "description": "relevance to the researcher, 0-10"},
+                    "id": {
+                        "type": "string",
+                        "description": "arXiv id exactly as given",
+                    },
+                    "score": {
+                        "type": "number",
+                        "description": "relevance to the researcher, 0-10",
+                    },
                     "quality": {"type": "number", "description": "paper quality, 0-10"},
-                    "impact": {"type": "number", "description": "field-wide importance, 0-10"},
-                    "quality_note": {"type": "string",
-                                     "description": "max 12 words: the main strength or weakness"},
+                    "impact": {
+                        "type": "number",
+                        "description": "field-wide importance, 0-10",
+                    },
+                    "quality_note": {
+                        "type": "string",
+                        "description": "max 12 words: the main strength or weakness",
+                    },
                     "reason": {"type": "string", "description": "max 15 words"},
-                    "tags": {"type": "array", "items": {"type": "string"},
-                             "description": "1-3 short topic tags"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "1-3 short topic tags",
+                    },
                 },
-                "required": ["id", "score", "quality", "impact", "quality_note", "reason", "tags"],
+                "required": [
+                    "id",
+                    "score",
+                    "quality",
+                    "impact",
+                    "quality_note",
+                    "reason",
+                    "tags",
+                ],
                 "additionalProperties": False,
             },
         }
@@ -71,24 +94,29 @@ SCHEMA = {
 
 def build_system(cfg: dict, liked: list[str]) -> str:
     seeds = list(cfg.get("seed_papers", [])) + liked
-    return SYSTEM.format(profile=cfg["interest_profile"].strip(),
-                         seeds="\n".join(f"- {s}" for s in seeds) or "(none)")
+    return SYSTEM.format(
+        profile=cfg["interest_profile"].strip(),
+        seeds="\n".join(f"- {s}" for s in seeds) or "(none)",
+    )
 
 
 def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> None:
     system = build_system(cfg, liked)
     model = cfg["models"]["scorer"]
     bs = cfg["models"].get("score_batch_size", 20)
-    batches = [papers[i:i + bs] for i in range(0, len(papers), bs)]
+    batches = [papers[i : i + bs] for i in range(0, len(papers), bs)]
     by_id = {p.id: p for p in papers}
 
     def run(batch: list[Paper]) -> list[dict]:
         user = "\n\n".join(
-            f"<paper id=\"{p.id}\">\nTitle: {p.title}\nCategories: {', '.join(p.categories)}\n"
-            f"Abstract: {p.abstract[:2500]}\n</paper>" for p in batch)
+            f'<paper id="{p.id}">\nTitle: {p.title}\nCategories: {", ".join(p.categories)}\n'
+            f"Abstract: {p.abstract[:2500]}\n</paper>"
+            for p in batch
+        )
         try:
-            out = llm.ask_structured(model, system, user, SCHEMA,
-                                     max_tokens=160 * len(batch) + 500)
+            out = llm.ask_structured(
+                model, system, user, SCHEMA, max_tokens=160 * len(batch) + 500
+            )
             return out.get("papers", [])
         except Exception as e:  # one bad batch shouldn't kill the digest
             print(f"    scoring batch failed, skipping {len(batch)} papers: {e}")

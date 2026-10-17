@@ -1,4 +1,5 @@
 """Thin Claude wrapper: JSON structured outputs, retries, cost tracking."""
+
 from __future__ import annotations
 
 import json
@@ -21,8 +22,9 @@ class LLM:
         self.cost = 0.0
         self.calls = 0
 
-    def ask_structured(self, model: str, system: str, user: str, schema: dict,
-                       max_tokens: int = 4000) -> dict:
+    def ask_structured(
+        self, model: str, system: str, user: str, schema: dict, max_tokens: int = 4000
+    ) -> dict:
         """Ask for JSON matching `schema` using structured outputs.
 
         The API constrains the reply to the schema, so it is always valid JSON
@@ -35,8 +37,13 @@ class LLM:
                     model=model,
                     max_tokens=max_tokens,
                     # the system prompt (profile) is identical across calls → cache it
-                    system=[{"type": "text", "text": system,
-                             "cache_control": {"type": "ephemeral"}}],
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
                     messages=[{"role": "user", "content": user}],
                     output_config={"format": {"type": "json_schema", "schema": schema}},
                 )
@@ -47,10 +54,13 @@ class LLM:
                     raise ValueError("model declined this request")
                 text = "".join(b.text for b in resp.content if b.type == "text")
                 return json.loads(text)
-            except (anthropic.RateLimitError, anthropic.APIConnectionError,
-                    anthropic.InternalServerError) as e:
+            except (
+                anthropic.RateLimitError,
+                anthropic.APIConnectionError,
+                anthropic.InternalServerError,
+            ) as e:
                 last_err = e
-                wait = 2 ** attempt * 5
+                wait = 2**attempt * 5
                 print(f"    API busy ({type(e).__name__}), retrying in {wait}s")
                 time.sleep(wait)
             except ValueError as e:
@@ -62,6 +72,10 @@ class LLM:
         pin, pout = PRICES.get(model, (0, 0))
         cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
         cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
-        self.cost += (usage.input_tokens * pin + cache_write * pin * 1.25
-                      + cache_read * pin * 0.1 + usage.output_tokens * pout) / 1e6
+        self.cost += (
+            usage.input_tokens * pin
+            + cache_write * pin * 1.25
+            + cache_read * pin * 0.1
+            + usage.output_tokens * pout
+        ) / 1e6
         self.calls += 1

@@ -4,6 +4,7 @@ Real environment variables always win over .env.
 
 Supported keys: ANTHROPIC_API_KEY, DISCORD_WEBHOOK, AUTO_PULL.
 """
+
 from __future__ import annotations
 
 import os
@@ -23,4 +24,3 @@ def load_env(path: str = ".env") -> None:
                     val = val[1:-1]
                 if key and not os.environ.get(key):
                     os.environ[key] = val
-

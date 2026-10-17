@@ -1,4 +1,5 @@
 """Fetch today's announcements from arXiv RSS feeds."""
+
 from __future__ import annotations
 
 import re
@@ -18,7 +19,7 @@ UA = {"User-Agent": "arxiv-daily-digest/1.0 (personal research feed)"}
 
 @dataclass
 class Paper:
-    id: str                      # e.g. 2610.01234 (no version)
+    id: str  # e.g. 2610.01234 (no version)
     title: str
     abstract: str
     authors: list[str]
@@ -26,10 +27,10 @@ class Paper:
     announce_type: str
     link: str
     # filled in later
-    interest: float = 0.0        # relevance to you, 0-10
-    quality: float = 5.0         # estimated rigor / significance, 0-10
+    interest: float = 0.0  # relevance to you, 0-10
+    quality: float = 5.0  # estimated rigor / significance, 0-10
     quality_note: str = ""
-    impact: float = 0.0          # field-wide importance regardless of your interests, 0-10
+    impact: float = 0.0  # field-wide importance regardless of your interests, 0-10
     reason: str = ""
     tags: list[str] = field(default_factory=list)
     affiliations: list[str] = field(default_factory=list)

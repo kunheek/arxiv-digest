@@ -1,4 +1,5 @@
 """Stage 2: watchlist matching + affiliations/intro from the arXiv HTML page."""
+
 from __future__ import annotations
 
 import re
@@ -11,7 +12,9 @@ from bs4 import BeautifulSoup
 from .fetch import UA, Paper
 
 HTML_URL = "https://arxiv.org/html/{id}"
-CODE_RE = re.compile(r"https?://(?:github\.com|huggingface\.co|gitlab\.com)/[\w\-./]+", re.I)
+CODE_RE = re.compile(
+    r"https?://(?:github\.com|huggingface\.co|gitlab\.com)/[\w\-./]+", re.I
+)
 
 
 def _norm(name: str) -> str:
@@ -31,15 +34,21 @@ def match_institutions(p: Paper, watch: list[str]) -> None:
         aliases = [a.strip() for a in entry.split("|")]
         for a in aliases:
             # word-boundary match so "MIT" doesn't fire on "submitted"
-            if re.search(rf"(?<![A-Za-z]){re.escape(a)}(?![A-Za-z])", hay,
-                         flags=0 if a.isupper() else re.I):
+            if re.search(
+                rf"(?<![A-Za-z]){re.escape(a)}(?![A-Za-z])",
+                hay,
+                flags=0 if a.isupper() else re.I,
+            ):
                 hits.append(aliases[0])
                 break
     p.inst_hits = hits
 
 
-_NOISE = re.compile(r"equal contribution|corresponding|project lead|work done|^\W*$|@|^email|"
-                   r"^\W*(?:\d+|[*†‡§¶])\W*$", re.I)
+_NOISE = re.compile(
+    r"equal contribution|corresponding|project lead|work done|^\W*$|@|^email|"
+    r"^\W*(?:\d+|[*†‡§¶])\W*$",
+    re.I,
+)
 
 
 def _split(text: str) -> list[str]:
@@ -73,7 +82,7 @@ def parse_affiliations(soup: BeautifulSoup, authors: list[str] = ()) -> list[str
         t = t.strip(" ,;*†‡§¶0123456789")
         if len(t) < 3 or len(t) > 150 or _NOISE.search(t) or _norm(t) in names:
             continue
-        if any(n and n in _norm(t) for n in names):      # contains an author name
+        if any(n and n in _norm(t) for n in names):  # contains an author name
             continue
         out.append(t)
     return list(dict.fromkeys(out))[:20]
@@ -132,9 +141,16 @@ def enrich(papers: list[Paper], cfg: dict) -> list[Paper]:
     # HTML only for the shortlist: top interest + any watched-author paper worth a look
     by_interest = sorted(papers, key=lambda p: p.interest, reverse=True)
     shortlist = by_interest[: cfg["limits"]["enrich_top_n"]]
-    shortlist += [p for p in papers if p.author_hits and p not in shortlist
-                  and p.interest >= r["min_interest_for_bonus"]]
-    shortlist += [p for p in papers if p.impact >= r.get("impact_min", 7) and p not in shortlist]
+    shortlist += [
+        p
+        for p in papers
+        if p.author_hits
+        and p not in shortlist
+        and p.interest >= r["min_interest_for_bonus"]
+    ]
+    shortlist += [
+        p for p in papers if p.impact >= r.get("impact_min", 7) and p not in shortlist
+    ]
     print(f"  fetching HTML for {len(shortlist)} shortlisted papers")
     for i, p in enumerate(shortlist):
         if i:
