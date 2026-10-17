@@ -19,13 +19,17 @@ Given a paper's abstract and introduction, return:
   (median paper ≈ 5): is the idea significant, is the evidence specific and convincing
   (strong baselines, ablations, real benchmarks), do the claims match the evidence?
   Judge substance only, not author or lab prestige, and not topic relevance.
-- quality_note: max 12 words: the main strength or weakness"""
+- quality_note: max 12 words: the main strength or weakness
+- impact: 0-10, how important this is to the wider vision / ML community regardless of this
+  researcher's topics (9-10 landmark, rare; 7-8 broadly important; 4-6 notable in its
+  subfield; 0-3 ordinary). Needs a visible broad-significance claim plus evidence."""
 
 SCHEMA = {
     "type": "object",
     "properties": {"tldr": {"type": "string"}, "why": {"type": "string"},
-                   "quality": {"type": "number"}, "quality_note": {"type": "string"}},
-    "required": ["tldr", "why", "quality", "quality_note"],
+                   "quality": {"type": "number"}, "quality_note": {"type": "string"},
+                   "impact": {"type": "number"}},
+    "required": ["tldr", "why", "quality", "quality_note", "impact"],
     "additionalProperties": False,
 }
 
@@ -43,6 +47,8 @@ def summarize(papers: list[Paper], cfg: dict, llm: LLM) -> None:
             if "quality" in out:      # better informed than the abstract-only score
                 p.quality = max(0.0, min(10.0, float(out["quality"])))
                 p.quality_note = out.get("quality_note", p.quality_note)
+            if "impact" in out:
+                p.impact = max(0.0, min(10.0, float(out["impact"])))
         except Exception as e:  # one failed summary shouldn't kill the digest
             print(f"    summary failed for {p.id}: {e}")
             p.tldr = p.abstract[:250] + "…"

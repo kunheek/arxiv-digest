@@ -2,7 +2,7 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const PAGE = 80;
-// index row: 0 id, 1 date, 2 title, 3 score, 4 tags, 5 authors, 6 watch, 7 code, 8 cats, 9 nAuthors, 10 quality
+// index row: 0 id, 1 date, 2 title, 3 score, 4 tags, 5 authors, 6 watch, 7 code, 8 cats, 9 nAuthors, 10 quality, 11 impact
 let DATA, byDate = {}, dates = [], shards = {};
 let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 
@@ -44,7 +44,7 @@ function parseQuery(q) {
     const unq = (v) => v.replace(/^"|"$/g, "").toLowerCase();
     let m = t.match(/^score(>=|<=|>|<|=|:)(?:>=|<=|>|<|=)?(\d+(?:\.\d+)?)$/i) || t.match(/^score:(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i);
     if (m) { toks.push({ k: "score", op: m[1] === ":" ? "=" : m[1], v: +m[2], neg }); continue; }
-    m = t.match(/^(quality|rating)(>=|<=|>|<|=|:)(?:>=|<=|>|<|=)?(\d+(?:\.\d+)?)$/i) || t.match(/^(quality|rating):(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i);
+    m = t.match(/^(quality|impact|rating)(>=|<=|>|<|=|:)(?:>=|<=|>|<|=)?(\d+(?:\.\d+)?)$/i) || t.match(/^(quality|impact|rating):(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i);
     if (m) { toks.push({ k: m[1].toLowerCase(), op: m[2] === ":" ? "=" : m[2], v: +m[3], neg }); continue; }
     m = t.match(/^(au|author|tag|cat|id|date|has|is):(.+)$/i);
     if (m) { toks.push({ k: m[1].toLowerCase().replace("author", "au"), v: unq(m[2]), neg }); continue; }
@@ -58,6 +58,7 @@ function matchTok(t, r, full) {
   switch (t.k) {
     case "score": ok = cmp[t.op](r[3], t.v); break;
     case "quality": ok = cmp[t.op](r[10] ?? 5, t.v); break;
+    case "impact": ok = cmp[t.op](r[11] ?? 0, t.v); break;
     case "rating": ok = cmp[t.op](ratings[r[0]] || 0, t.v); break;
     case "au": ok = r[5].some((a) => a.toLowerCase().includes(t.v)); break;
     case "tag": ok = r[4].some((a) => a.toLowerCase().includes(t.v)); break;
@@ -66,6 +67,7 @@ function matchTok(t, r, full) {
     case "date": ok = r[1].startsWith(t.v); break;
     case "has": ok = t.v === "code" ? !!r[7] : false; break;
     case "is": ok = t.v === "watch" ? !!r[6] : t.v === "top" ? r[3] >= 7
+      : t.v === "landmark" ? (r[11] ?? 0) >= 7
       : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
     default: {
       let hay = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase();
@@ -119,7 +121,7 @@ function rowHTML(r, i, showDate) {
     <div class="sc ${cls(score)}" title="score">${score.toFixed(1)}</div>
     <div class="main">
       <a class="t" href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${hl(title)}</a>
-      <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}</span>
+      <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}${(r[11] ?? 0) >= 7 ? ' <span title="big / foundational paper (field-wide impact ' + r[11].toFixed(0) + ')">📌</span>' : ""}</span>
       <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span>
       <span class="fa">${esc(authorsShort(r, 1))}</span>
       <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span> · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
@@ -139,7 +141,7 @@ async function fillDet(el) {
     (d.tldr ? `<p>${hl(d.tldr)}</p>` : d.reason ? `<p>${hl(d.reason)}</p>` : "") +
     (d.why ? `<p class="why"><b>Why you</b>${esc(d.why)}</p>` : "") +
     (badges ? `<p>${badges}</p>` : "") +
-    `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
+    `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)} · Impact ${(r[11] ?? 0).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
     (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>`;
 }
 const starsHTML = (id) => "Your rating: " + [1, 2, 3, 4, 5].map((n) =>

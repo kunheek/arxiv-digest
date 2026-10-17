@@ -29,6 +29,7 @@ class Paper:
     interest: float = 0.0        # relevance to you, 0-10
     quality: float = 5.0         # estimated rigor / significance, 0-10
     quality_note: str = ""
+    impact: float = 0.0          # field-wide importance regardless of your interests, 0-10
     reason: str = ""
     tags: list[str] = field(default_factory=list)
     affiliations: list[str] = field(default_factory=list)

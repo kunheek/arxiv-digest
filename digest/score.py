@@ -31,6 +31,14 @@ Also rate the paper's QUALITY from the abstract alone, independently of the topi
   0-1  = no substantive contribution visible
 Judge the evidence and the idea, never the authors' or labs' prestige. Do not reward a
 paper for matching the researcher's topic here; that is the relevance score's job.
+Finally rate the paper's IMPACT (0-10), again independently of this researcher's topics:
+would the wider computer-vision / machine-learning community see it as a big or foundational
+contribution (a new foundation model or widely usable open model, a major dataset or
+benchmark, a paradigm-shifting method, a result likely to be cited across subfields)?
+  9-10 = landmark, rare (usually 0-2 papers a day)   7-8 = broadly important
+  4-6  = notable within its subfield                 0-3  = ordinary
+Do not inflate it: impact needs a visible claim of broad significance plus evidence, and
+author or lab prestige alone is not evidence.
 Score every paper you receive."""
 
 SCHEMA = {
@@ -44,13 +52,14 @@ SCHEMA = {
                     "id": {"type": "string", "description": "arXiv id exactly as given"},
                     "score": {"type": "number", "description": "relevance to the researcher, 0-10"},
                     "quality": {"type": "number", "description": "paper quality, 0-10"},
+                    "impact": {"type": "number", "description": "field-wide importance, 0-10"},
                     "quality_note": {"type": "string",
                                      "description": "max 12 words: the main strength or weakness"},
                     "reason": {"type": "string", "description": "max 15 words"},
                     "tags": {"type": "array", "items": {"type": "string"},
                              "description": "1-3 short topic tags"},
                 },
-                "required": ["id", "score", "quality", "quality_note", "reason", "tags"],
+                "required": ["id", "score", "quality", "impact", "quality_note", "reason", "tags"],
                 "additionalProperties": False,
             },
         }
@@ -97,6 +106,7 @@ def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> Non
             if p:
                 p.interest = float(r.get("score", 0))
                 p.quality = max(0.0, min(10.0, float(r.get("quality", 5))))
+                p.impact = max(0.0, min(10.0, float(r.get("impact", 0))))
                 p.quality_note = r.get("quality_note", "")
                 p.reason = r.get("reason", "")
                 p.tags = list(r.get("tags", []))[:3]

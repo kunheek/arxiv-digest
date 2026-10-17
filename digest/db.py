@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS papers (
   id TEXT PRIMARY KEY, date TEXT NOT NULL, title TEXT NOT NULL, abstract TEXT,
   authors TEXT, affiliations TEXT, categories TEXT, tags TEXT,
   announce_type TEXT, link TEXT, code_url TEXT,
-  interest REAL, quality REAL DEFAULT 5, quality_note TEXT DEFAULT '', final REAL, reason TEXT, tldr TEXT, why TEXT,
+  interest REAL, quality REAL DEFAULT 5, impact REAL DEFAULT 0, quality_note TEXT DEFAULT '', final REAL, reason TEXT, tldr TEXT, why TEXT,
   author_hits TEXT, inst_hits TEXT
 );
 CREATE INDEX IF NOT EXISTS papers_date ON papers(date);
@@ -36,8 +36,9 @@ def connect(path: str = DB_PATH) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
     have = {r["name"] for r in con.execute("PRAGMA table_info(papers)")}
-    for col, ddl in (("quality", "REAL DEFAULT 5"), ("quality_note", "TEXT DEFAULT ''")):
-        if col not in have:                      # databases created before quality scoring
+    for col, ddl in (("quality", "REAL DEFAULT 5"), ("quality_note", "TEXT DEFAULT ''"),
+                     ("impact", "REAL DEFAULT 0")):
+        if col not in have:                      # databases created before these scores
             con.execute(f"ALTER TABLE papers ADD COLUMN {col} {ddl}")
     return con
 

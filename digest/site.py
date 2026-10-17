@@ -35,8 +35,11 @@ def _dump(path: str, obj) -> None:
         json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
-def build(con, out: str = "site", title: str = "arXiv digest", min_interest: float = 0) -> int:
-    papers = [p for p in db.all_papers(con) if p["interest"] >= min_interest]
+def build(con, out: str = "site", title: str = "arXiv digest", min_interest: float = 0,
+          min_impact: float = 11) -> int:
+    """Papers shown: relevance >= min_interest OR impact >= min_impact (foundational work)."""
+    papers = [p for p in db.all_papers(con)
+              if p["interest"] >= min_interest or (p["impact"] or 0) >= min_impact]
     days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
     if os.path.isdir(out):
         shutil.rmtree(out)
@@ -55,7 +58,7 @@ def build(con, out: str = "site", title: str = "arXiv digest", min_interest: flo
         short = au if len(au) <= 8 else au[:6] + au[-2:]       # index keeps first 6 + last 2
         index.append([p["id"], p["date"], p["title"], p["final"], p["tags"], short,
                       1 if (p["author_hits"] or p["inst_hits"]) else 0,
-                      1 if p["code_url"] else 0, p["categories"][:4], len(au), p["quality"]])
+                      1 if p["code_url"] else 0, p["categories"][:4], len(au), p["quality"], p["impact"] or 0])
         shard = shards.setdefault(p["date"], {})
         shard[p["id"]] = {
             "tldr": p["tldr"], "why": p["why"], "reason": p["reason"], "qn": p["quality_note"],

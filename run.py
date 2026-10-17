@@ -31,7 +31,8 @@ def build_site(con, cfg: dict, publish_it: bool = True) -> bool:
     """Build site/ and publish it. Returns True if it was published."""
     d = cfg["delivery"]
     n = site.build(con, "site", d.get("site_title", "arXiv digest"),
-                   cfg["limits"].get("site_min_interest", 3))
+                   cfg["limits"].get("site_min_interest", 2),
+                   cfg["ranking"].get("impact_min", 7) - 1)
     print(f"    built site/ with {n} papers")
     if publish_it and d.get("publish"):
         try:
@@ -112,8 +113,9 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     top = ranked[:k]
     # tolerate scorer noise: also summarize the most relevant papers that a low quality
     # score pushed out of the top k, so one bad judgement can't hide a likely must-read
-    rescued = sorted((p for p in ranked[k:] if p.interest >= cfg["limits"].get("rescue_min_interest", 7)),
-                     key=lambda p: p.interest, reverse=True)[: cfg["limits"].get("rescue_k", 5)]
+    rescued = sorted((p for p in ranked[k:] if p.interest >= cfg["limits"].get("rescue_min_interest", 7)
+                      or p.impact >= cfg["ranking"].get("impact_min", 7) + 1),
+                     key=lambda p: max(p.interest, p.impact), reverse=True)[: cfg["limits"].get("rescue_k", 5)]
     print(f"4/5 summarizing top {len(top)}" + (f" + {len(rescued)} rescued by relevance" if rescued else ""))
     summarize(top + rescued, cfg, llm)
     for p in top + rescued:            # the summarizer re-judged quality after reading the intro
@@ -129,7 +131,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
                   today, stats)
         published = cfg["delivery"].get("site") and build_site(con, cfg)
         if use_discord:
-            stats["on_site"] = sum(p.interest >= cfg["limits"].get("site_min_interest", 2) for p in papers)
+            stats["on_site"] = sum(p.interest >= cfg["limits"].get("site_min_interest", 2)
+                                   or p.impact >= cfg["ranking"].get("impact_min", 7) - 1 for p in papers)
             stats["top"] = sum(p.final >= 7 for p in papers)
             deliver.to_discord(today, stats, os.environ["DISCORD_WEBHOOK"],
                                publish.site_url(cfg) + f"#/?d={today}" if published else "")

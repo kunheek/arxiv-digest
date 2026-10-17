@@ -1,7 +1,7 @@
 # arXiv daily digest
 
 Every weekday this scans new **cs.CV, cs.CG, cs.LG and stat.ML** papers, scores each one
-for **relevance to your interests and for quality** with Claude, boosts papers from
+for **relevance to your interests, quality, and field-wide impact** with Claude, boosts papers from
 researchers and labs you watch, summarizes the best ones, and publishes them to a website, with a **Discord** ping when it's updated.
 Everything is archived in a local SQLite database and published as a searchable website
 on **GitHub Pages**. It runs from cron on your own Linux machine.
@@ -9,9 +9,10 @@ on **GitHub Pages**. It runs from cron on your own Linux machine.
 ```
 arXiv RSS (≈ 450 new papers/day)
    │
-   ├─ 1. Haiku scores every abstract: relevance (0–10) and quality (0–10)
+   ├─ 1. Haiku scores every abstract: relevance, quality, and impact (each 0–10)
    ├─ 2. Watchlist: author names + affiliations (from arXiv HTML, top ~40 only)
-   ├─ 3. Rank = relevance × quality factor + author bonus + institution bonus
+   ├─ 3. Rank = relevance × quality factor + author/institution bonus,
+   │     floored by impact so big / foundational papers survive any topic
    ├─ 4. Sonnet writes TL;DR + "why you should care" for the top 15 and re-judges
    │     quality after reading the introduction
    └─ 5. data/digest.db (everything) · website (relevance ≥ 2) · one Discord message
@@ -54,7 +55,7 @@ root). Public unless your plan supports private Pages. Controlled by `delivery.s
 
 - **Views:** Dense (one line per paper), Compact, Full. Click a row to expand.
 - **Search:** words match title, tags, authors, id. Operators: `au:` `tag:` `cat:` `date:`
-  `id:` `score>=7` `quality>=7` `rating>=4` `has:code` `is:watch` `is:top` `is:rated`
+  `id:` `score>=7` `quality>=7` `impact>=7` `rating>=4` `has:code` `is:watch` `is:top` `is:landmark` `is:rated`
   `is:unrated`, `-exclude`, `"quoted phrase"`. The *abstracts* toggle also searches TL;DRs and
   abstracts. Press `?` on the site for shortcuts. Searches live in the URL, so they're shareable.
 - **Scale:** visitors load one compact index plus one small file per day they open.
@@ -79,6 +80,13 @@ Papers rated ≥ `feedback.min_rating` become positive examples in later scoring
   paper. `0` ranks by relevance only. The quality score is judged from the abstract (and the
   introduction for the top 15) by an LLM, so treat it as a noisy signal: it rewards specific,
   evidenced claims and penalizes vague or hype-heavy ones, not author or lab prestige.
+- **`ranking.impact_min` / `impact_weight`**: big or foundational papers are kept *regardless
+  of your interests*. The scorer rates each paper's field-wide impact (new foundation model,
+  major dataset or benchmark, paradigm shift; prestige alone doesn't count). At
+  `impact_min` (7) or above, a paper's final score is at least `impact_weight` × impact, so a
+  9 lands at 8.1 among the top picks, gets a summary, and shows on the site with a 📌 even if
+  it's far from your topics. Papers from `impact_min − 1` also appear on the site. Raise
+  `impact_min` if too many ordinary papers get flagged, or set it to 11 to turn this off.
 - **`watch_authors` / `watch_institutions`** add bonuses. Aliases use `|`. Keep them modest.
 - **Cost knobs:** `summarize_top_k`, `enrich_top_n`. Switching the summarizer to
   `claude-opus-5-5` roughly doubles summary cost.

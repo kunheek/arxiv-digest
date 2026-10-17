@@ -54,6 +54,10 @@ ranking:
   author_bonus: 3.0        # added if any watched author is on the paper
   institution_bonus: 1.5   # added if any watched institution appears
   min_interest_for_bonus: 4 # watched-group bonus only applies if interest >= this (0-10)
+  impact_min: 7            # papers rated this high for field-wide impact are kept regardless of
+  impact_weight: 0.9       # your interests: final score is at least impact_weight × impact
+                           # (a 9 lands at 8.1, among the top picks). They also reach the site
+                           # from impact_min − 1 and get a summary. Set impact_min: 11 to disable.
   quality_weight: 0.3      # 0 = rank by relevance only; 0.3 = a 0-quality paper keeps 70% of its
                            # relevance score, a 10-quality paper keeps 100%. Raise to favour quality.
 

@@ -102,7 +102,7 @@ def fetch_html(p: Paper, max_intro_chars: int = 6000) -> None:
 
 
 def final_score(p: Paper, cfg: dict) -> float:
-    """Relevance, scaled by quality, plus watchlist bonuses.
+    """Relevance, scaled by quality, plus watchlist bonuses, floored by field-wide impact.
 
     quality only modulates relevance (quality_weight w: a 0-quality paper keeps 1-w of its
     relevance, a 10-quality paper keeps all of it), so a great but irrelevant paper never
@@ -114,7 +114,11 @@ def final_score(p: Paper, cfg: dict) -> float:
     if p.interest >= r["min_interest_for_bonus"]:
         bonus += r["author_bonus"] if p.author_hits else 0
         bonus += r["institution_bonus"] if p.inst_hits else 0
-    return round(base + bonus, 2)
+    final = base + bonus
+    # big / foundational papers are kept regardless of topic: a high impact score sets a floor
+    if p.impact >= r.get("impact_min", 7):
+        final = max(final, r.get("impact_weight", 0.9) * p.impact)
+    return round(final, 2)
 
 
 def enrich(papers: list[Paper], cfg: dict) -> list[Paper]:
@@ -130,6 +134,7 @@ def enrich(papers: list[Paper], cfg: dict) -> list[Paper]:
     shortlist = by_interest[: cfg["limits"]["enrich_top_n"]]
     shortlist += [p for p in papers if p.author_hits and p not in shortlist
                   and p.interest >= r["min_interest_for_bonus"]]
+    shortlist += [p for p in papers if p.impact >= r.get("impact_min", 7) and p not in shortlist]
     print(f"  fetching HTML for {len(shortlist)} shortlisted papers")
     for i, p in enumerate(shortlist):
         if i:

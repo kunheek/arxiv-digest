@@ -61,11 +61,12 @@ class FakeClient:
             data = {"papers": [{"id": i, "score": score.get(i, 0),
                                 "quality": {"2610.00001": 8, "2610.00002": 2}.get(i, 5),
                                 "quality_note": "solid ablations",
+                                "impact": {"2610.00003": 9}.get(i, 2),
                                 "reason": 'uses "TeaCache"-style caching', "tags": ["video-dit"]}
                                for i in ids]}
         else:  # summary
             data = {"tldr": "Does a thing fast.", "why": "Matches your DiT work.",
-                    "quality": 9, "quality_note": "convincing"}
+                    "quality": 9, "quality_note": "convincing", "impact": 3}
         usage = types.SimpleNamespace(input_tokens=1000, output_tokens=100,
                                       cache_read_input_tokens=0, cache_creation_input_tokens=0)
         return types.SimpleNamespace(stop_reason="end_turn", usage=usage,
@@ -171,6 +172,11 @@ def test_quality_modulates_relevance():
     assert final_score(mk(8, 5), cfg) == 6.8
     assert final_score(mk(8, 10, author_hits=["X"]), cfg) == 11.0
     assert final_score(mk(2, 10, author_hits=["X"]), cfg) == 2.0   # bonus gated by relevance
+    # foundational papers are kept regardless of topic
+    cfg["ranking"].update(impact_min=7, impact_weight=0.9)
+    assert final_score(mk(0, 5, impact=9), cfg) == 8.1             # irrelevant but landmark
+    assert final_score(mk(0, 5, impact=6), cfg) == 0.0             # below impact_min: no floor
+    assert final_score(mk(8, 10, impact=9), cfg) == 8.1            # floor, not a sum
 
 
 def test_ratings_roundtrip(tmp_path):
