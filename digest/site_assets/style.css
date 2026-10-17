@@ -71,3 +71,8 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 dialog h2{font-size:1rem;margin:.2rem 0}dialog table td{padding:.15rem .8rem .15rem 0;font-size:.85rem}
 code,kbd{background:var(--lobg);border-radius:4px;padding:0 .3rem;font-size:.82rem}
 @media (max-width:640px){.side{display:none}.r{grid-template-columns:2rem 1fr}#help{display:none}.brand{display:none}}
+.rb{color:var(--star);font-weight:700;font-size:.78rem;margin-left:.35rem}
+.qn{color:var(--mute);font-size:.8rem}
+.stars{margin-top:.3rem;color:var(--mute);font-size:.8rem}
+.star{border:0;background:none;font-size:1.15rem;line-height:1;cursor:pointer;color:var(--line);padding:0 .08rem}
+.star.on{color:var(--star)}.star:hover{color:var(--star)}

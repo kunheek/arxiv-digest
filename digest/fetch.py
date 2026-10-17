@@ -26,7 +26,9 @@ class Paper:
     announce_type: str
     link: str
     # filled in later
-    interest: float = 0.0
+    interest: float = 0.0        # relevance to you, 0-10
+    quality: float = 5.0         # estimated rigor / significance, 0-10
+    quality_note: str = ""
     reason: str = ""
     tags: list[str] = field(default_factory=list)
     affiliations: list[str] = field(default_factory=list)

@@ -14,12 +14,18 @@ SYSTEM = """You write a daily paper digest for one researcher.
 
 Given a paper's abstract and introduction, return:
 - tldr: what they do and the key result, max 35 words, concrete, no hype
-- why: why THIS researcher should care / how it connects to their work, max 25 words"""
+- why: why THIS researcher should care / how it connects to their work, max 25 words
+- quality: 0-10 verdict now that you have read the introduction, as a skeptical reviewer
+  (median paper ≈ 5): is the idea significant, is the evidence specific and convincing
+  (strong baselines, ablations, real benchmarks), do the claims match the evidence?
+  Judge substance only, not author or lab prestige, and not topic relevance.
+- quality_note: max 12 words: the main strength or weakness"""
 
 SCHEMA = {
     "type": "object",
-    "properties": {"tldr": {"type": "string"}, "why": {"type": "string"}},
-    "required": ["tldr", "why"],
+    "properties": {"tldr": {"type": "string"}, "why": {"type": "string"},
+                   "quality": {"type": "number"}, "quality_note": {"type": "string"}},
+    "required": ["tldr", "why", "quality", "quality_note"],
     "additionalProperties": False,
 }
 
@@ -34,6 +40,9 @@ def summarize(papers: list[Paper], cfg: dict, llm: LLM) -> None:
         try:
             out = llm.ask_structured(model, system, user, SCHEMA, max_tokens=600)
             p.tldr, p.why = out.get("tldr", ""), out.get("why", "")
+            if "quality" in out:      # better informed than the abstract-only score
+                p.quality = max(0.0, min(10.0, float(out["quality"])))
+                p.quality_note = out.get("quality_note", p.quality_note)
         except Exception as e:  # one failed summary shouldn't kill the digest
             print(f"    summary failed for {p.id}: {e}")
             p.tldr = p.abstract[:250] + "…"

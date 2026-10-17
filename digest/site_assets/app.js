@@ -2,10 +2,13 @@
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const PAGE = 80;
-// index row: 0 id, 1 date, 2 title, 3 score, 4 tags, 5 authors, 6 watch, 7 code, 8 cats, 9 nAuthors
+// index row: 0 id, 1 date, 2 title, 3 score, 4 tags, 5 authors, 6 watch, 7 code, 8 cats, 9 nAuthors, 10 quality
 let DATA, byDate = {}, dates = [], shards = {};
 let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 
+let ratings = {};
+try { ratings = JSON.parse(localStorage.getItem("ratings") || "{}"); } catch {}
+const saveRatings = () => { try { localStorage.setItem("ratings", JSON.stringify(ratings)); } catch {} updateExport(); };
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
@@ -41,6 +44,8 @@ function parseQuery(q) {
     const unq = (v) => v.replace(/^"|"$/g, "").toLowerCase();
     let m = t.match(/^score(>=|<=|>|<|=|:)(?:>=|<=|>|<|=)?(\d+(?:\.\d+)?)$/i) || t.match(/^score:(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i);
     if (m) { toks.push({ k: "score", op: m[1] === ":" ? "=" : m[1], v: +m[2], neg }); continue; }
+    m = t.match(/^(quality|rating)(>=|<=|>|<|=|:)(?:>=|<=|>|<|=)?(\d+(?:\.\d+)?)$/i) || t.match(/^(quality|rating):(>=|<=|>|<|=)(\d+(?:\.\d+)?)$/i);
+    if (m) { toks.push({ k: m[1].toLowerCase(), op: m[2] === ":" ? "=" : m[2], v: +m[3], neg }); continue; }
     m = t.match(/^(au|author|tag|cat|id|date|has|is):(.+)$/i);
     if (m) { toks.push({ k: m[1].toLowerCase().replace("author", "au"), v: unq(m[2]), neg }); continue; }
     toks.push({ k: "free", v: unq(t), neg });
@@ -52,13 +57,16 @@ function matchTok(t, r, full) {
   let ok;
   switch (t.k) {
     case "score": ok = cmp[t.op](r[3], t.v); break;
+    case "quality": ok = cmp[t.op](r[10] ?? 5, t.v); break;
+    case "rating": ok = cmp[t.op](ratings[r[0]] || 0, t.v); break;
     case "au": ok = r[5].some((a) => a.toLowerCase().includes(t.v)); break;
     case "tag": ok = r[4].some((a) => a.toLowerCase().includes(t.v)); break;
     case "cat": ok = r[8].some((a) => a.toLowerCase().startsWith(t.v)); break;
     case "id": ok = r[0].startsWith(t.v); break;
     case "date": ok = r[1].startsWith(t.v); break;
     case "has": ok = t.v === "code" ? !!r[7] : false; break;
-    case "is": ok = t.v === "watch" ? !!r[6] : t.v === "top" ? r[3] >= 7 : false; break;
+    case "is": ok = t.v === "watch" ? !!r[6] : t.v === "top" ? r[3] >= 7
+      : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
     default: {
       let hay = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase();
       if (full) hay += " " + (full.tldr + " " + full.why + " " + full.abs).toLowerCase();
@@ -112,8 +120,9 @@ function rowHTML(r, i, showDate) {
     <div class="main">
       <a class="t" href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${hl(title)}</a>
       <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}</span>
+      <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span>
       <span class="fa">${esc(authorsShort(r, 1))}</span>
-      <div class="sub">${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
+      <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span> · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
       <div class="det"></div>
     </div>
     <div class="side">${showDate ? `<a href="#/?d=${date}" style="color:inherit">${date.slice(5)}</a> · ` : ""}${esc(cats[0] || "")}</div></article>`;
@@ -129,8 +138,27 @@ async function fillDet(el) {
     (r[9] > 4 ? `<p class="au">${(d.au || r[5]).map(esc).join(", ")}</p>` : "") +
     (d.tldr ? `<p>${hl(d.tldr)}</p>` : d.reason ? `<p>${hl(d.reason)}</p>` : "") +
     (d.why ? `<p class="why"><b>Why you</b>${esc(d.why)}</p>` : "") +
-    (badges ? `<p>${badges}</p>` : "") + (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "");
+    (badges ? `<p>${badges}</p>` : "") +
+    `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
+    (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>`;
 }
+const starsHTML = (id) => "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
+  `<button class="star${(ratings[id] || 0) >= n ? " on" : ""}" data-n="${n}" title="${n} (key ${n})">★</button>`).join("");
+function rate(id, n) {
+  if (!n || ratings[id] === n) delete ratings[id]; else ratings[id] = n;
+  saveRatings();
+  document.querySelectorAll(".r").forEach((el) => {
+    const r = rows[+el.dataset.i]; if (!r || r[0] !== id) return;
+    el.querySelector(".rb").textContent = ratings[id] ? "★" + ratings[id] : "";
+    const st = el.querySelector(".stars"); if (st) st.innerHTML = starsHTML(id);
+  });
+}
+function updateExport() { const n = Object.keys(ratings).length; $("#export").textContent = `Export ratings (${n})`; $("#export").hidden = !n; }
+$("#export").onclick = () => {
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), ratings }, null, 1)], { type: "application/json" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ratings.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
 const open = (el, on) => { el.classList.toggle("open", on ?? !el.classList.contains("open")); if (el.classList.contains("open")) fillDet(el); };
 
 async function renderMore() {
@@ -200,6 +228,8 @@ $("#dens").addEventListener("click", (e) => {
 $("#help").onclick = () => $("#helpbox").showModal();
 $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const st = e.target.closest(".star");
+  if (st) return rate(st.parentElement.dataset.id, +st.dataset.n);
   const tag = e.target.closest(".tag");
   if (tag) return addTag(tag.dataset.tag);
   const r = e.target.closest(".r"); if (r) { setCur(+r.dataset.i); open(r); }
@@ -227,12 +257,14 @@ document.addEventListener("keydown", (e) => {
     case "e": { const all = [...els].some((x) => !x.classList.contains("open")); els.forEach((x) => open(x, all)); break; }
     case "[": case "]": { const i = day(); if (i < 0) break; const n = dates[i + (e.key === "[" ? 1 : -1)]; if (n) { $("#day").value = n; push(false); } break; }
     case "?": $("#helpbox").showModal(); break;
+    default: if (at && /^[0-5]$/.test(e.key)) rate(rows[+at.dataset.i][0], +e.key);
   }
 });
 new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.length) renderMore(); }, { rootMargin: "600px" }).observe($("#sentinel"));
 
 // ── boot ───────────────────────────────────────────────────────────────
 setDensity(store.get("dens", "compact"));
+updateExport();
 fetch("data/index.json").then((r) => r.json()).then((d) => {
   DATA = d;
   for (const r of d.papers) (byDate[r[1]] ||= []).push(r);

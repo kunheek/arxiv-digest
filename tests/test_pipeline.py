@@ -59,10 +59,13 @@ class FakeClient:
             score = {"2610.00001": 9, "2610.00002": 8, "2610.00003": 1}
             # a reason with quotes in it -- the old text-parsing version broke on this
             data = {"papers": [{"id": i, "score": score.get(i, 0),
+                                "quality": {"2610.00001": 8, "2610.00002": 2}.get(i, 5),
+                                "quality_note": "solid ablations",
                                 "reason": 'uses "TeaCache"-style caching', "tags": ["video-dit"]}
                                for i in ids]}
         else:  # summary
-            data = {"tldr": "Does a thing fast.", "why": "Matches your DiT work."}
+            data = {"tldr": "Does a thing fast.", "why": "Matches your DiT work.",
+                    "quality": 9, "quality_note": "convincing"}
         usage = types.SimpleNamespace(input_tokens=1000, output_tokens=100,
                                       cache_read_input_tokens=0, cache_creation_input_tokens=0)
         return types.SimpleNamespace(stop_reason="end_turn", usage=usage,
@@ -105,10 +108,10 @@ def test_end_to_end(tmp_path, monkeypatch):
     cfg = yaml.safe_load(open("config.yaml"))
     cfg["watch_authors"] = ["Andrea Vedaldi"]
     cfg["watch_institutions"] = ["University of Oxford|Oxford"]
-    cfg["delivery"].update(site=False, publish=False, sheets=False, discord=False)
+    cfg["delivery"].update(site=False, publish=False, discord=False)
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
-    args = ["--state", str(state), "--config", str(cfg_path), "--results", str(tmp_path / "results"),
+    args = ["--state", str(state), "--config", str(cfg_path),
             "--db", str(tmp_path / "digest.db")]
     assert run.main(args, llm=llm, fetcher=fetcher) == 0
 
@@ -142,100 +145,60 @@ def test_failed_batch_is_skipped_not_fatal():
     assert all(p.interest == 0 for p in papers)
 
 
-# ── Sheet-only modes ───────────────────────────────────────────
-class FakeSS:
-    def __init__(self, ws): self.ws, self.batches = ws, []
-    def fetch_sheet_metadata(self, params):
-        return {"sheets": [{"properties": {"sheetId": 7}, "basicFilter": {}}]}
-    def batch_update(self, body):
-        self.batches.append(body["requests"])
-        for r in body["requests"]:
-            if "deleteDimension" in r:
-                i = r["deleteDimension"]["range"]["startIndex"]  # 0-based incl. header
-                del self.ws.rows[i - 1]
-
-
-class FakeWS:
-    id = 7
-    title = "2026-10"
-    def __init__(self, rows): self.rows = rows; self.spreadsheet = FakeSS(self)
-    def row_values(self, i): return __import__("digest.deliver", fromlist=["x"]).SHEET_HEADER
-    def get(self, rng, value_render_option=None): return [list(r) for r in self.rows]
-    def insert_rows(self, rows, row, value_input_option):
-        self.rows[row - 2:row - 2] = rows
-
-
-def test_save_load_and_replace_day(tmp_path, monkeypatch):
-    from digest import deliver
-    from digest.fetch import Paper
-    papers = [Paper(f"2610.0000{i}", f"T{i}", "abs", ["A"], ["cs.CV"], "new",
-                    f"https://arxiv.org/abs/2610.0000{i}", interest=8 - i, final=8 - i,
-                    intro="x" * 5000) for i in range(3)]
-    deliver.save_results(papers, "2026-10-15", str(tmp_path))
-    date, loaded = deliver.load_results(None, str(tmp_path))
-    assert date == "2026-10-15" and [p.id for p in loaded] == [p.id for p in papers]
-    assert loaded[0].intro == ""                                   # intro not stored
-
-    # sheet: today (as a date serial, like Sheets returns) with a rating, then yesterday
-    serial = (__import__("datetime").date(2026, 10, 15) - __import__("datetime").date(1899, 12, 30)).days
-    old_today = ["x"] * 17; old_today[0] = serial; old_today[1] = "2610.00001"
-    old_today[15], old_today[16] = True, 5
-    yesterday = ["2026-10-14", "2610.99999"] + [""] * 15
-    ws = FakeWS([old_today, yesterday])
-    monkeypatch.setattr(deliver, "_sheet", lambda cfg, date: ws)
-    deliver.to_sheets(loaded, "2026-10-15", {}, replace=True)
-
-    ids = [r[1] for r in ws.rows]
-    assert ids == ["2610.00000", "2610.00001", "2610.00002", "2610.99999"]  # replaced in place
-    kept = ws.rows[1]
-    assert kept[15] is True and kept[16] == 5                     # read?/rating preserved
-    assert ws.rows[0][15] is False and ws.rows[0][16] == ""
-
-    deliver.reformat({}, "2026-10-15")
-    last = ws.spreadsheet.batches[-1]
-    borders = [r["updateBorders"]["range"]["startRowIndex"] for r in last if "updateBorders" in r]
-    assert borders == [3, 4]                                       # under each day
-
-
-def test_sheets_only_mode_makes_no_api_calls(tmp_path, monkeypatch):
-    from digest import deliver
-    from digest.fetch import Paper
-    deliver.save_results([Paper("2610.1", "T", "a", [], [], "new", "l", interest=9, final=9)],
-                         "2026-10-15", str(tmp_path))
-    got = {}
-    monkeypatch.setattr(deliver, "to_sheets",
-                        lambda ps, d, cfg, replace=False: got.update(n=len(ps), d=d, r=replace))
-    monkeypatch.setenv("GOOGLE_CREDS", "{}"); monkeypatch.setenv("SHEET_ID", "x")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    boom = lambda *a: (_ for _ in ()).throw(AssertionError("arXiv must not be fetched"))
-    assert run.main(["--sheets-only", "--results", str(tmp_path)], fetcher=boom) == 0
-    assert got == {"n": 1, "d": "2026-10-15", "r": True}
-
-
-def test_tab_names():
-    from digest.deliver import tab_name
-    assert tab_name({}, "2026-10-15") == "2026-10"                                  # default
-    assert tab_name({"delivery": {"sheet_tabs": "yearly"}}, "2026-10-15") == "2026"
-    assert tab_name({"delivery": {"sheet_tabs": "single", "sheet_worksheet": "papers"}},
-                    "2026-10-15") == "papers"
-
-
 def test_env_file(tmp_path, monkeypatch):
     from digest.env import load_env
-    key = tmp_path / "creds.json"
-    key.write_text('{"client_email": "bot@x.iam.gserviceaccount.com"}')
     env = tmp_path / ".env"
-    env.write_text(f'# comment\nexport ANTHROPIC_API_KEY="sk-ant-test"\nSHEET_ID=abc\n'
-                   f"GOOGLE_CREDS_FILE={key}\nDISCORD_WEBHOOK=from-file\n")
-    for k in ["ANTHROPIC_API_KEY", "SHEET_ID", "GOOGLE_CREDS", "GOOGLE_CREDS_FILE"]:
+    env.write_text('# comment\nexport ANTHROPIC_API_KEY="sk-ant-test"\nAUTO_PULL=0\n'
+                   "DISCORD_WEBHOOK=from-file\n")
+    for k in ["ANTHROPIC_API_KEY", "AUTO_PULL"]:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("DISCORD_WEBHOOK", "from-shell")      # real env wins over .env
     load_env(str(env))
     assert os.environ["ANTHROPIC_API_KEY"] == "sk-ant-test"
-    assert os.environ["SHEET_ID"] == "abc"
-    assert json.loads(os.environ["GOOGLE_CREDS"])["client_email"].startswith("bot@")
+    assert os.environ["AUTO_PULL"] == "0"
     assert os.environ["DISCORD_WEBHOOK"] == "from-shell"
+
+
+def test_quality_modulates_relevance():
+    from digest.enrich import final_score
+    from digest.fetch import Paper
+    cfg = {"ranking": {"quality_weight": 0.4, "min_interest_for_bonus": 4,
+                       "author_bonus": 3, "institution_bonus": 1.5}}
+    mk = lambda i, q, **k: Paper("1", "t", "a", [], [], "new", "l", interest=i, quality=q, **k)
+    assert final_score(mk(8, 10), cfg) == 8.0            # top quality keeps full relevance
+    assert final_score(mk(8, 0), cfg) == 4.8             # zero quality keeps 60%
+    assert final_score(mk(0, 10), cfg) == 0.0            # quality can't rescue irrelevance
+    assert final_score(mk(8, 5), cfg) == 6.4
+    assert final_score(mk(8, 10, author_hits=["X"]), cfg) == 11.0
+    assert final_score(mk(2, 10, author_hits=["X"]), cfg) == 2.0   # bonus gated by relevance
+
+
+def test_ratings_roundtrip(tmp_path):
+    from digest import db
+    from digest.fetch import Paper
+    con = db.connect(str(tmp_path / "d.db"))
+    db.upsert(con, [Paper("1", "Loved", "a", [], [], "new", "l"), Paper("2", "Meh", "a", [], [], "new", "l")],
+              "2026-10-16")
+    f = tmp_path / "ratings.json"
+    f.write_text(json.dumps({"exported": "x", "ratings": {"1": 5, "2": 2, "3": 9}}))
+    assert db.import_ratings(con, str(f)) == 2            # 9 is out of range → ignored
+    assert db.liked_titles(con, 4, 10) == ["Loved"]
+    f.write_text(json.dumps({"ratings": {"1": 0}}))       # 0 clears
+    db.import_ratings(con, str(f))
+    assert db.liked_titles(con, 4, 10) == []
+
+
+def test_old_db_gets_quality_columns(tmp_path):
+    import sqlite3
+    from digest import db
+    p = str(tmp_path / "old.db")
+    c = sqlite3.connect(p)
+    c.execute("CREATE TABLE papers (id TEXT PRIMARY KEY, date TEXT NOT NULL, title TEXT NOT NULL, abstract TEXT, "
+              "authors TEXT, affiliations TEXT, categories TEXT, tags TEXT, announce_type TEXT, link TEXT, "
+              "code_url TEXT, interest REAL, final REAL, reason TEXT, tldr TEXT, why TEXT, author_hits TEXT, inst_hits TEXT)")
+    c.commit(); c.close()
+    cols = {r["name"] for r in db.connect(p).execute("PRAGMA table_info(papers)")}
+    assert {"quality", "quality_note"} <= cols
 
 
 def test_parse_affiliations():

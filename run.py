@@ -1,13 +1,12 @@
 """Daily arXiv digest.
 
     python run.py                 # full run: fetch → score → enrich → summarize → deliver
-    python run.py --dry-run       # no Discord/Sheets, no state update; writes digest.md
+    python run.py --dry-run       # no Discord, no DB/state update; writes digest.md
     python run.py --max-papers 60 # cap papers scored (cheap test)
 
-  Sheet-only modes (no arXiv, no Claude, free):
-    python run.py --sheets-only               # rewrite the latest saved day in the Sheet
-    python run.py --sheets-only --date 2026-10-15
-    python run.py --reformat                  # re-apply layout to every row, data untouched
+  Free modes (no arXiv, no Claude):
+    python run.py --site-only [--no-publish]   # rebuild (and publish) the website from the DB
+    python run.py --import-ratings FILE        # load ratings.json exported from the website
 """
 from __future__ import annotations
 
@@ -21,7 +20,7 @@ import yaml
 
 from digest import db, deliver, publish, site, state
 from digest.env import load_env
-from digest.enrich import enrich
+from digest.enrich import enrich, final_score
 from digest.fetch import fetch_today
 from digest.llm import LLM
 from digest.score import score_all
@@ -47,20 +46,13 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--state", default="state/seen.json")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--max-papers", type=int, default=0)
-    ap.add_argument("--sheets-only", action="store_true",
-                    help="rewrite one day in the Sheet from results/DATE.json")
-    ap.add_argument("--reformat", action="store_true",
-                    help="re-apply the Sheet layout to all rows")
-    ap.add_argument("--date", help="YYYY-MM-DD: day for --sheets-only (default: latest saved) "
-                                   "or month tab for --reformat (default: today)")
-    ap.add_argument("--results", default=deliver.RESULTS_DIR)
     ap.add_argument("--db", default=db.DB_PATH)
     ap.add_argument("--site-only", action="store_true",
                     help="rebuild the website from the database (and publish it); free")
     ap.add_argument("--no-publish", action="store_true",
                     help="with --site-only: build site/ but don't push to GitHub Pages")
-    ap.add_argument("--import-results", action="store_true",
-                    help="load results/*.json into the database")
+    ap.add_argument("--import-ratings", metavar="FILE",
+                    help="load ratings exported from the website into the database")
     args = ap.parse_args(argv)
 
     load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
@@ -68,35 +60,19 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         cfg = yaml.safe_load(f)
     today = dt.datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
 
-    if args.import_results or args.site_only:
+    if args.import_ratings or args.site_only:
         con = db.connect(args.db)
-        if args.import_results:
-            print(f"imported {db.import_results(con, args.results)} papers into {args.db}")
+        if args.import_ratings:
+            print(f"imported {db.import_ratings(con, args.import_ratings)} ratings into {args.db}")
         if args.site_only:
             build_site(con, cfg, publish_it=not args.no_publish)
         return 0
 
-    if args.sheets_only or args.reformat:
-        if not (os.environ.get("GOOGLE_CREDS") and os.environ.get("SHEET_ID")):
-            print("ERROR: GOOGLE_CREDS (or GOOGLE_CREDS_FILE) and SHEET_ID must be set "
-                  "for Sheet-only modes (in .env or the environment).")
-            return 1
-        if args.sheets_only:
-            date, saved = deliver.load_results(args.date, args.results)
-            keep = [p for p in saved if p.interest >= cfg["limits"]["sheets_min_interest"]]
-            print(f"rewriting {len(keep)} saved papers for {date} (no arXiv / Claude calls)")
-            deliver.to_sheets(keep, date, cfg, replace=True)
-        if args.reformat:
-            print("re-applying Sheet layout")
-            deliver.reformat(cfg, args.date or today)
-        return 0
     if llm is None:
         key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
         if not key:
             print("ERROR: ANTHROPIC_API_KEY is not set (or is empty).\n"
-                  "  • Your machine: put  ANTHROPIC_API_KEY=sk-ant-...  in .env (see .env.example).\n"
-                  "  • GitHub: Settings → Secrets and variables → Actions → Repository secrets,\n"
-                  "    name exactly ANTHROPIC_API_KEY, value = just the key.")
+                  "  Put  ANTHROPIC_API_KEY=sk-ant-...  in .env (see .env.example).")
             return 1
         if not key.startswith("sk-ant-"):
             print("WARNING: ANTHROPIC_API_KEY doesn't start with 'sk-ant-'. Check you pasted only the key.")
@@ -113,11 +89,14 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         print("nothing new today (weekend/holiday, or already processed)")
         return 0
 
-    use_sheets = cfg["delivery"].get("sheets") and not args.dry_run and os.environ.get("GOOGLE_CREDS")
     use_discord = cfg["delivery"].get("discord") and not args.dry_run and os.environ.get("DISCORD_WEBHOOK")
-    liked = deliver.liked_from_sheets(cfg) if use_sheets else []
-    if liked:
-        print(f"    using {len(liked)} highly-rated papers from your Sheet as examples")
+    con = db.connect(args.db)
+    liked = []
+    fb = cfg.get("feedback", {})
+    if fb.get("enabled"):
+        liked = db.liked_titles(con, fb.get("min_rating", 4), fb.get("max_examples", 30))
+        if liked:
+            print(f"    using {len(liked)} papers you rated highly as examples")
 
     print("2/5 scoring abstracts")
     score_all(papers, cfg, llm, liked)
@@ -129,25 +108,20 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     top = ranked[: cfg["limits"]["summarize_top_k"]]
     print(f"4/5 summarizing top {len(top)}")
     summarize(top, cfg, llm)
+    for p in top:                      # the summarizer re-judged quality after reading the intro
+        p.final = final_score(p, cfg)
+    ranked.sort(key=lambda p: (p.final, p.interest), reverse=True)
+    top = ranked[: cfg["limits"]["summarize_top_k"]]
 
     stats = {"total": len(papers), "cost": llm.cost, "calls": llm.calls}
     print(f"5/5 delivering  (≈ ${llm.cost:.3f}, {llm.calls} calls)")
     deliver.to_markdown(top, today, stats, "digest.md")
-    saved = deliver.save_results(
-        [p for p in ranked if p.interest >= cfg["limits"]["sheets_min_interest"]],
-        today, args.results)
-    print(f"    saved results to {saved}")
     if use_discord:
         deliver.to_discord(top[: cfg["limits"]["discord_top_k"]], today, stats,
                            os.environ["DISCORD_WEBHOOK"])
         print("    posted to Discord")
-    if use_sheets:
-        keep = [p for p in ranked if p.interest >= cfg["limits"]["sheets_min_interest"]]
-        deliver.to_sheets(keep, today, cfg)
-        print(f"    wrote {len(keep)} rows to Google Sheets")
 
     if not args.dry_run:
-        con = db.connect(args.db)
         db.upsert(con, [p for p in ranked if p.interest >= cfg["limits"].get("db_min_interest", 0)],
                   today, stats)
         if cfg["delivery"].get("site"):

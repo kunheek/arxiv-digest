@@ -1,4 +1,4 @@
-"""Stage 1: score every abstract for relevance with a cheap model."""
+"""Stage 1: score every abstract for relevance AND quality with a cheap model."""
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
@@ -20,6 +20,17 @@ For each paper you receive, rate how much THIS researcher would want to read it:
 10 = must read (squarely on their core topic), 7-9 = strongly relevant,
 4-6 = adjacent / possibly useful, 1-3 = tangential, 0 = irrelevant.
 Be strict: most papers in a broad category should score 0-3.
+
+Also rate the paper's QUALITY from the abstract alone, independently of the topic
+(0-10, be a skeptical reviewer, median paper ≈ 5):
+  8-10 = clear, significant idea with strong, specific evidence (quantitative gains over
+         strong recent baselines, broad benchmarks, ablations, theory that is actually proved)
+  5-7  = sound and useful but incremental, or evidence only partly described
+  2-4  = vague, mostly hype, weak or unspecified evaluation, trivial tweak, or a
+         claim that outruns the evidence
+  0-1  = no substantive contribution visible
+Judge the evidence and the idea, never the authors' or labs' prestige. Do not reward a
+paper for matching the researcher's topic here; that is the relevance score's job.
 Score every paper you receive."""
 
 SCHEMA = {
@@ -31,12 +42,15 @@ SCHEMA = {
                 "type": "object",
                 "properties": {
                     "id": {"type": "string", "description": "arXiv id exactly as given"},
-                    "score": {"type": "number", "description": "0-10"},
+                    "score": {"type": "number", "description": "relevance to the researcher, 0-10"},
+                    "quality": {"type": "number", "description": "paper quality, 0-10"},
+                    "quality_note": {"type": "string",
+                                     "description": "max 12 words: the main strength or weakness"},
                     "reason": {"type": "string", "description": "max 15 words"},
                     "tags": {"type": "array", "items": {"type": "string"},
                              "description": "1-3 short topic tags"},
                 },
-                "required": ["id", "score", "reason", "tags"],
+                "required": ["id", "score", "quality", "quality_note", "reason", "tags"],
                 "additionalProperties": False,
             },
         }
@@ -65,7 +79,7 @@ def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> Non
             f"Abstract: {p.abstract[:2500]}\n</paper>" for p in batch)
         try:
             out = llm.ask_structured(model, system, user, SCHEMA,
-                                     max_tokens=120 * len(batch) + 500)
+                                     max_tokens=160 * len(batch) + 500)
             return out.get("papers", [])
         except Exception as e:  # one bad batch shouldn't kill the digest
             print(f"    scoring batch failed, skipping {len(batch)} papers: {e}")
@@ -82,6 +96,8 @@ def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> Non
             p = by_id.get(str(r.get("id", "")).strip().split("v")[0])
             if p:
                 p.interest = float(r.get("score", 0))
+                p.quality = max(0.0, min(10.0, float(r.get("quality", 5))))
+                p.quality_note = r.get("quality_note", "")
                 p.reason = r.get("reason", "")
                 p.tags = list(r.get("tags", []))[:3]
                 scored += 1

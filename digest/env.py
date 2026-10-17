@@ -1,10 +1,8 @@
 """Load settings from a local .env file (for running on your own machine).
 
-Real environment variables always win over .env, so GitHub Actions or a
-shell `export` still work unchanged.
+Real environment variables always win over .env.
 
-Supported keys: ANTHROPIC_API_KEY, DISCORD_WEBHOOK, SHEET_ID, and either
-GOOGLE_CREDS (the JSON itself) or GOOGLE_CREDS_FILE (path to the key file).
+Supported keys: ANTHROPIC_API_KEY, DISCORD_WEBHOOK, AUTO_PULL.
 """
 from __future__ import annotations
 
@@ -26,11 +24,3 @@ def load_env(path: str = ".env") -> None:
                 if key and not os.environ.get(key):
                     os.environ[key] = val
 
-    # GOOGLE_CREDS_FILE=/path/key.json → GOOGLE_CREDS=<file contents>
-    creds_file = os.environ.get("GOOGLE_CREDS_FILE", "").strip()
-    if creds_file and not os.environ.get("GOOGLE_CREDS"):
-        creds_file = os.path.expanduser(creds_file)
-        if not os.path.exists(creds_file):
-            raise FileNotFoundError(f"GOOGLE_CREDS_FILE points to a missing file: {creds_file}")
-        with open(creds_file) as f:
-            os.environ["GOOGLE_CREDS"] = f.read()

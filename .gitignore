@@ -14,5 +14,4 @@ logs/
 # local database and generated site
 data/
 site/
-results/
 state/

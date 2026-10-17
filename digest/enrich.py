@@ -101,6 +101,22 @@ def fetch_html(p: Paper, max_intro_chars: int = 6000) -> None:
             p.code_url = m.group(0).rstrip(".)")
 
 
+def final_score(p: Paper, cfg: dict) -> float:
+    """Relevance, scaled by quality, plus watchlist bonuses.
+
+    quality only modulates relevance (quality_weight w: a 0-quality paper keeps 1-w of its
+    relevance, a 10-quality paper keeps all of it), so a great but irrelevant paper never
+    outranks a relevant one, and a relevant but weak paper sinks a few points."""
+    r = cfg["ranking"]
+    w = r.get("quality_weight", 0.4)
+    base = p.interest * (1 - w + w * p.quality / 10)
+    bonus = 0.0
+    if p.interest >= r["min_interest_for_bonus"]:
+        bonus += r["author_bonus"] if p.author_hits else 0
+        bonus += r["institution_bonus"] if p.inst_hits else 0
+    return round(base + bonus, 2)
+
+
 def enrich(papers: list[Paper], cfg: dict) -> list[Paper]:
     r = cfg["ranking"]
     for p in papers:
@@ -122,9 +138,5 @@ def enrich(papers: list[Paper], cfg: dict) -> list[Paper]:
         match_institutions(p, cfg.get("watch_institutions", []))
 
     for p in papers:
-        bonus = 0.0
-        if p.interest >= r["min_interest_for_bonus"]:
-            bonus += r["author_bonus"] if p.author_hits else 0
-            bonus += r["institution_bonus"] if p.inst_hits else 0
-        p.final = round(p.interest + bonus, 2)
+        p.final = final_score(p, cfg)
     return shortlist

@@ -22,6 +22,7 @@
     <label class="chk"><input type="checkbox" id="c"> code</label>
     <label class="chk" title="Also search TL;DRs and abstracts (loads day files)"><input type="checkbox" id="a"> abstracts</label>
     <span class="grow"></span>
+    <button id="export" class="btn" hidden title="Download your ratings; then run: python run.py --import-ratings ratings.json"></button>
     <div class="seg" id="dens" role="group" aria-label="Density"><button data-v="dense" title="One line per paper">Dense</button><button data-v="compact" title="Two lines, click to expand">Compact</button><button data-v="full" title="Everything expanded">Full</button></div>
   </div>
 </header>
@@ -41,10 +42,12 @@
     <tr><td><code>score&gt;=7</code></td><td>score (&gt; &lt; &gt;= &lt;= =)</td></tr>
     <tr><td><code>date:2026-10</code></td><td>date prefix</td></tr>
     <tr><td><code>has:code</code> <code>is:watch</code> <code>is:top</code></td><td>flags (top = score ≥ 7)</td></tr>
+    <tr><td><code>quality&gt;=7</code></td><td>estimated paper quality (0–10)</td></tr>
+    <tr><td><code>rating&gt;=4</code> <code>is:rated</code> <code>is:unrated</code></td><td>your own ratings</td></tr>
     <tr><td><code>id:2610.2</code></td><td>arXiv id prefix</td></tr>
   </table>
   <h2>Keys</h2>
-  <p><kbd>/</kbd> search · <kbd>j</kbd>/<kbd>k</kbd> next/previous · <kbd>Enter</kbd> or <kbd>x</kbd> expand · <kbd>o</kbd> open arXiv · <kbd>e</kbd> expand all · <kbd>[</kbd>/<kbd>]</kbd> older/newer day</p>
+  <p><kbd>/</kbd> search · <kbd>j</kbd>/<kbd>k</kbd> next/previous · <kbd>Enter</kbd> or <kbd>x</kbd> expand · <kbd>o</kbd> open arXiv · <kbd>1</kbd>–<kbd>5</kbd> rate (<kbd>0</kbd> clears) · <kbd>e</kbd> expand all · <kbd>[</kbd>/<kbd>]</kbd> older/newer day</p>
   <form method="dialog"><button class="btn">Close</button></form>
 </dialog>
 <script src="app.js"></script>

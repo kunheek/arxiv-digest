@@ -55,10 +55,10 @@ def build(con, out: str = "site", title: str = "arXiv digest", min_interest: flo
         short = au if len(au) <= 8 else au[:6] + au[-2:]       # index keeps first 6 + last 2
         index.append([p["id"], p["date"], p["title"], p["final"], p["tags"], short,
                       1 if (p["author_hits"] or p["inst_hits"]) else 0,
-                      1 if p["code_url"] else 0, p["categories"][:4], len(au)])
+                      1 if p["code_url"] else 0, p["categories"][:4], len(au), p["quality"]])
         shard = shards.setdefault(p["date"], {})
         shard[p["id"]] = {
-            "tldr": p["tldr"], "why": p["why"], "reason": p["reason"],
+            "tldr": p["tldr"], "why": p["why"], "reason": p["reason"], "qn": p["quality_note"],
             "abs": p["abstract"], "au": au, "cat": p["categories"], "code": p["code_url"],
             "ah": p["author_hits"], "ih": p["inst_hits"],
         }
