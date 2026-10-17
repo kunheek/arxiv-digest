@@ -105,13 +105,18 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     enrich(papers, cfg)
 
     ranked = sorted(papers, key=lambda p: (p.final, p.interest), reverse=True)
-    top = ranked[: cfg["limits"]["summarize_top_k"]]
-    print(f"4/5 summarizing top {len(top)}")
-    summarize(top, cfg, llm)
-    for p in top:                      # the summarizer re-judged quality after reading the intro
+    k = cfg["limits"]["summarize_top_k"]
+    top = ranked[:k]
+    # tolerate scorer noise: also summarize the most relevant papers that a low quality
+    # score pushed out of the top k, so one bad judgement can't hide a likely must-read
+    rescued = sorted((p for p in ranked[k:] if p.interest >= cfg["limits"].get("rescue_min_interest", 7)),
+                     key=lambda p: p.interest, reverse=True)[: cfg["limits"].get("rescue_k", 5)]
+    print(f"4/5 summarizing top {len(top)}" + (f" + {len(rescued)} rescued by relevance" if rescued else ""))
+    summarize(top + rescued, cfg, llm)
+    for p in top + rescued:            # the summarizer re-judged quality after reading the intro
         p.final = final_score(p, cfg)
     ranked.sort(key=lambda p: (p.final, p.interest), reverse=True)
-    top = ranked[: cfg["limits"]["summarize_top_k"]]
+    top = ranked[:k]
 
     stats = {"total": len(papers), "cost": llm.cost, "calls": llm.calls}
     print(f"5/5 delivering  (≈ ${llm.cost:.3f}, {llm.calls} calls)")

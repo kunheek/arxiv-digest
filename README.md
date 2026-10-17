@@ -14,7 +14,7 @@ arXiv RSS (≈ 450 new papers/day)
    ├─ 3. Rank = relevance × quality factor + author bonus + institution bonus
    ├─ 4. Sonnet writes TL;DR + "why you should care" for the top 15 and re-judges
    │     quality after reading the introduction
-   └─ 5. Discord (top 10) · data/digest.db (everything) · website (score ≥ 3)
+   └─ 5. Discord (top 10) · data/digest.db (everything) · website (relevance ≥ 2)
 ```
 
 Expected cost: roughly **$0.15–0.50 per day**. Every run prints its actual cost.
@@ -73,7 +73,7 @@ Papers rated ≥ `feedback.min_rating` become positive examples in later scoring
 - **`interest_profile`** matters most. Be specific about what's core, adjacent and unwanted.
 - **`seed_papers`** are titles that are "exactly my taste".
 - **`ranking.quality_weight`** (0–1): how much estimated quality matters. Final relevance is
-  scaled by `1 − w + w·quality/10`, so with the default 0.4 a zero-quality paper keeps 60% of
+  scaled by `1 − w + w·quality/10`, so with the default 0.3 a zero-quality paper keeps 70% of
   its relevance and a 10-quality paper keeps all of it. Quality never rescues an irrelevant
   paper. `0` ranks by relevance only. The quality score is judged from the abstract (and the
   introduction for the top 15) by an LLM, so treat it as a noisy signal: it rewards specific,

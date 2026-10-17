@@ -162,13 +162,13 @@ def test_env_file(tmp_path, monkeypatch):
 def test_quality_modulates_relevance():
     from digest.enrich import final_score
     from digest.fetch import Paper
-    cfg = {"ranking": {"quality_weight": 0.4, "min_interest_for_bonus": 4,
+    cfg = {"ranking": {"quality_weight": 0.3, "min_interest_for_bonus": 4,
                        "author_bonus": 3, "institution_bonus": 1.5}}
     mk = lambda i, q, **k: Paper("1", "t", "a", [], [], "new", "l", interest=i, quality=q, **k)
     assert final_score(mk(8, 10), cfg) == 8.0            # top quality keeps full relevance
-    assert final_score(mk(8, 0), cfg) == 4.8             # zero quality keeps 60%
+    assert final_score(mk(8, 0), cfg) == 5.6             # zero quality keeps 70%
     assert final_score(mk(0, 10), cfg) == 0.0            # quality can't rescue irrelevance
-    assert final_score(mk(8, 5), cfg) == 6.4
+    assert final_score(mk(8, 5), cfg) == 6.8
     assert final_score(mk(8, 10, author_hits=["X"]), cfg) == 11.0
     assert final_score(mk(2, 10, author_hits=["X"]), cfg) == 2.0   # bonus gated by relevance
 
