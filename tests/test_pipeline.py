@@ -220,3 +220,15 @@ def test_parse_affiliations():
         '<div class="ltx_authors"><span class="ltx_personname">Yi Li</span>'
         '<span class="ltx_personname">Jo Ng</span></div>', "html.parser")
     assert parse_affiliations(names_only, ["Yi Li", "Jo Ng"]) == []
+
+
+def test_discord_is_a_single_summary_message(monkeypatch):
+    from digest import deliver
+    sent = []
+    resp = types.SimpleNamespace(status_code=200, raise_for_status=lambda: None)
+    monkeypatch.setattr(deliver.requests, "post", lambda url, json, timeout: sent.append(json) or resp)
+    deliver.to_discord("2026-10-17", {"total": 454, "on_site": 172, "top": 14}, "http://hook",
+                       "https://u.github.io/r/#/?d=2026-10-17")
+    assert len(sent) == 1 and "embeds" not in sent[0]
+    msg = sent[0]["content"]
+    assert "updated" in msg and "454" in msg and "172" in msg and "<https://u.github.io/r/#/?d=2026-10-17>" in msg

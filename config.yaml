@@ -60,7 +60,6 @@ ranking:
 limits:
   enrich_top_n: 40         # fetch arXiv HTML (affiliations + intro) for this many candidates
   summarize_top_k: 15      # Sonnet summaries for the final top K
-  discord_top_k: 10        # how many to post to Discord
   db_min_interest: 0       # keep papers scoring >= this in data/digest.db (0 = every scored paper, ~1 MB/day)
   site_min_interest: 2     # show papers with relevance >= this on the website. Deliberately low:
                            # scores are noisy, and you can raise the cutoff in the site's score filter
@@ -80,8 +79,9 @@ feedback:
   max_examples: 30
 
 delivery:
-  discord: true
+  discord: true              # one "digest updated" message with a link to the site
   site: true                 # keep data/digest.db and build the website in site/
   publish: true              # push site/ to the gh-pages branch (GitHub Pages)
   publish_branch: gh-pages
   site_title: arXiv digest
+  # site_url: https://you.github.io/arxiv-digest/   # default: derived from the git remote

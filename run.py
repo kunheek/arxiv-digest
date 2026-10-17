@@ -1,7 +1,7 @@
 """Daily arXiv digest.
 
     python run.py                 # full run: fetch → score → enrich → summarize → deliver
-    python run.py --dry-run       # no Discord, no DB/state update; writes digest.md
+    python run.py --dry-run       # no Discord/site, no DB/state update; writes digest.md
     python run.py --max-papers 60 # cap papers scored (cheap test)
 
   Free modes (no arXiv, no Claude):
@@ -27,7 +27,8 @@ from digest.score import score_all
 from digest.summarize import summarize
 
 
-def build_site(con, cfg: dict, publish_it: bool = True) -> None:
+def build_site(con, cfg: dict, publish_it: bool = True) -> bool:
+    """Build site/ and publish it. Returns True if it was published."""
     d = cfg["delivery"]
     n = site.build(con, "site", d.get("site_title", "arXiv digest"),
                    cfg["limits"].get("site_min_interest", 3))
@@ -36,8 +37,10 @@ def build_site(con, cfg: dict, publish_it: bool = True) -> None:
         try:
             publish.publish("site", d.get("publish_branch", "gh-pages"))
             print("    published to GitHub Pages")
+            return True
         except Exception as e:      # never fail the digest because of the website
             print(f"    WARNING: publish failed: {getattr(e, 'stderr', None) or e}")
+    return False
 
 
 def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
@@ -121,16 +124,16 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     stats = {"total": len(papers), "cost": llm.cost, "calls": llm.calls}
     print(f"5/5 delivering  (≈ ${llm.cost:.3f}, {llm.calls} calls)")
     deliver.to_markdown(top, today, stats, "digest.md")
-    if use_discord:
-        deliver.to_discord(top[: cfg["limits"]["discord_top_k"]], today, stats,
-                           os.environ["DISCORD_WEBHOOK"])
-        print("    posted to Discord")
-
     if not args.dry_run:
         db.upsert(con, [p for p in ranked if p.interest >= cfg["limits"].get("db_min_interest", 0)],
                   today, stats)
-        if cfg["delivery"].get("site"):
-            build_site(con, cfg)
+        published = cfg["delivery"].get("site") and build_site(con, cfg)
+        if use_discord:
+            stats["on_site"] = sum(p.interest >= cfg["limits"].get("site_min_interest", 2) for p in papers)
+            stats["top"] = sum(p.final >= 7 for p in papers)
+            deliver.to_discord(today, stats, os.environ["DISCORD_WEBHOOK"],
+                               publish.site_url(cfg) + f"#/?d={today}" if published else "")
+            print("    posted to Discord")
         seen.update({p.id: today for p in papers})
         state.save(args.state, seen, today)
     return 0

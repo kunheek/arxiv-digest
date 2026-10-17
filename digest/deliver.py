@@ -20,43 +20,20 @@ def _badges(p: Paper) -> str:
 
 
 # ── Discord ────────────────────────────────────────────────────
-def to_discord(papers: list[Paper], date: str, stats: dict, webhook: str) -> None:
-    def post(payload):
-        for _ in range(3):
-            r = requests.post(webhook, json=payload, timeout=30)
-            if r.status_code == 429:
-                time.sleep(float(r.json().get("retry_after", 2)))
-                continue
-            r.raise_for_status()
-            return
-
-    post({"content": f"## 📚 arXiv digest — {date}\n"
-                     f"Scanned **{stats['total']}** papers · showing top **{len(papers)}** · "
-                     f"cost ≈ ${stats['cost']:.3f}"})
-    embeds = []
-    for i, p in enumerate(papers, 1):
-        desc = f"**TL;DR** {p.tldr}\n**Why you** {p.why}"
-        if _badges(p):
-            desc += f"\n{_badges(p)}"
-        embeds.append({
-            "title": f"{i}. {p.title}"[:256],
-            "url": p.link,
-            "description": desc[:4000],
-            "color": 0x2ECC71 if p.final >= 9 else 0x3498DB if p.final >= 7 else 0x95A5A6,
-            "footer": {"text": f"score {p.final:g} · {', '.join(p.tags)} · "
-                               f"{', '.join(p.authors[:3])}{' et al.' if len(p.authors) > 3 else ''}"[:2048]},
-        })
-    # Discord: max 10 embeds and ~6000 chars per message
-    batch, size = [], 0
-    for e in embeds:
-        n = len(e["title"]) + len(e["description"]) + len(e["footer"]["text"])
-        if batch and (len(batch) == 10 or size + n > 5500):
-            post({"embeds": batch})
-            batch, size = [], 0
-        batch.append(e)
-        size += n
-    if batch:
-        post({"embeds": batch})
+def to_discord(date: str, stats: dict, webhook: str, url: str = "") -> None:
+    """One short "digest updated" message; the papers themselves live on the website."""
+    lines = [f"📚 **arXiv digest updated** — {date}",
+             f"Scanned **{stats['total']}** papers · **{stats.get('on_site', 0)}** on the site"
+             f" · **{stats.get('top', 0)}** top picks"]
+    if url:
+        lines.append(f"<{url}>")
+    for _ in range(3):
+        r = requests.post(webhook, json={"content": "\n".join(lines)}, timeout=30)
+        if r.status_code == 429:
+            time.sleep(float(r.json().get("retry_after", 2)))
+            continue
+        r.raise_for_status()
+        return
 
 
 # ── Markdown (always written; handy for dry runs) ──

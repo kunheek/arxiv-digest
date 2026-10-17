@@ -2,7 +2,7 @@
 
 Every weekday this scans new **cs.CV, cs.CG, cs.LG and stat.ML** papers, scores each one
 for **relevance to your interests and for quality** with Claude, boosts papers from
-researchers and labs you watch, summarizes the best ones, and posts them to **Discord**.
+researchers and labs you watch, summarizes the best ones, and publishes them to a website, with a **Discord** ping when it's updated.
 Everything is archived in a local SQLite database and published as a searchable website
 on **GitHub Pages**. It runs from cron on your own Linux machine.
 
@@ -14,7 +14,7 @@ arXiv RSS (≈ 450 new papers/day)
    ├─ 3. Rank = relevance × quality factor + author bonus + institution bonus
    ├─ 4. Sonnet writes TL;DR + "why you should care" for the top 15 and re-judges
    │     quality after reading the introduction
-   └─ 5. Discord (top 10) · data/digest.db (everything) · website (relevance ≥ 2)
+   └─ 5. data/digest.db (everything) · website (relevance ≥ 2) · one Discord message
 ```
 
 Expected cost: roughly **$0.15–0.50 per day**. Every run prints its actual cost.
@@ -30,7 +30,8 @@ scripts/install_cron.sh                                 # Mon–Fri 14:03 and 16
 - **API key:** <https://platform.claude.com> → API keys. The digest uses the API, which is
   billed separately from chat usage.
 - **Discord (optional):** Server Settings → Integrations → Webhooks → New Webhook → copy URL.
-  Failures are also posted there.
+  Each run posts one "digest updated" message with a link to the site (no papers), and
+  failures are posted there too.
 - **Cron** needs the machine clock to be KST (the installer checks). The 16:03 run is a
   catch-up in case arXiv's feed was late; it does nothing if 14:03 got today's papers.
   Cron doesn't catch up on runs missed while the machine was off. Each run `git pull`s first
