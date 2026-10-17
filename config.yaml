@@ -32,10 +32,8 @@ seed_papers:
 # Researchers whose new papers you never want to miss (matched against author lists).
 # Use the name exactly as it appears on arXiv.
 watch_authors:
+  - Fei-Fei Li
   - Angjoo Kanazawa
-  - Song Han
-  - Saining Xie
-  - Kaiming He
 
 # Institutions / labs (matched case-insensitively against affiliations
 # extracted from the paper's arXiv HTML page). Aliases help matching.
@@ -43,8 +41,7 @@ watch_institutions:
   - Stanford
   - "Massachusetts Institute of Technology|MIT"
   - "UC Berkeley|University of California, Berkeley"
-  - Carnegie Mellon
-  - "University of Oxford|Oxford"
+  - "Carnegie Mellon|CMU"
   - "ETH Zurich|ETH Zürich"
   - "Max Planck"
   - "Google DeepMind|Google Research|Google"
