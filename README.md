@@ -31,9 +31,11 @@ scripts/install_cron.sh                                 # Mon–Fri 14:03 and 16
 - **API key:** <https://platform.claude.com> → API keys. The digest uses the API, which is
   billed separately from chat usage.
 - **Discord (optional):** Server Settings → Integrations → Webhooks → New Webhook → copy URL.
-  Each run posts one "digest updated" message with a link to the site (no papers), and
+  Each run posts one "digest updated" message with a link to the site (no papers). If the feed
+  is empty (e.g. a US holiday) you get a "no new papers" notice instead, and
   failures are posted there too.
-- **Cron** needs the machine clock to be KST (the installer checks). The 16:03 run is a
+- **Cron** runs in the system timezone (not your shell's `TZ`); the installer converts
+  14:03/16:03 KST to it (check with `timedatectl`). The 16:03 run is a
   catch-up in case arXiv's feed was late; it does nothing if 14:03 got today's papers.
   Cron doesn't catch up on runs missed while the machine was off. Each run `git pull`s first
   (set `AUTO_PULL=0` in `.env` to stop that).

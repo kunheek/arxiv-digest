@@ -370,3 +370,22 @@ def test_discord_is_a_single_summary_message(monkeypatch):
         and "172" in msg
         and "<https://u.github.io/r/#/?d=2026-10-17>" in msg
     )
+
+
+def test_empty_feed_notifies_but_processed_day_does_not(tmp_path, monkeypatch):
+    import yaml
+    sent = []
+    monkeypatch.setattr(run.deliver, "notify", lambda hook, text: sent.append(text))
+    monkeypatch.setenv("DISCORD_WEBHOOK", "http://hook")
+    monkeypatch.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    cfg = yaml.safe_load(open("config.yaml"))
+    cfg["delivery"].update(site=False, publish=False, discord=True)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    args = ["--state", str(tmp_path / "seen.json"), "--config", str(cfg_path), "--db", str(tmp_path / "d.db")]
+    assert run.main(args, llm=object(), fetcher=lambda *a: []) == 0          # empty feed
+    assert len(sent) == 1 and "no new papers" in sent[0]
+    seen = {p.id: "2026-10-19" for p in parse_rss(make_rss())}
+    (tmp_path / "seen.json").write_text(json.dumps(seen))
+    assert run.main(args, llm=object(), fetcher=lambda *a: parse_rss(make_rss())) == 0   # all seen
+    assert len(sent) == 1                                                    # stays quiet
