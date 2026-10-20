@@ -62,14 +62,28 @@ root). Public unless your plan supports private Pages. Controlled by `delivery.s
   abstracts. Press `?` on the site for shortcuts. Searches live in the URL, so they're shareable.
 - **Scale:** visitors load one compact index plus one small file per day they open.
 - **Database:** `data/digest.db` (git-ignored, back it up) keeps every scored paper
-  (`limits.db_min_interest`); the site shows those with relevance ≥ `limits.site_min_interest`.
+  (`limits.db_min_interest`). **FIFO limit:** when it holds more than `limits.db_max_papers`
+  (default 50,000 ≈ 110 days), the oldest papers are deleted. Papers you rated or bookmarked
+  are never deleted. The public site shows only papers with relevance ≥
+  `limits.site_min_interest` (or high impact).
 
-### Ratings (feedback loop)
-Rate papers 1–5 stars on the site (or press `1`–`5` on the selected row). Ratings are stored
-in your browser. To teach the scorer your taste:
+### Local site (all papers)
+```bash
+.venv/bin/python run.py --serve                  # http://127.0.0.1:8000
+.venv/bin/python run.py --serve --host 0.0.0.0   # reachable from your LAN (no auth!)
+```
+Same UI, but it serves **every** paper in the database straight from SQLite (always current,
+no rebuild after a run). Ratings and bookmarks you set there are saved directly to the
+database, so no export is needed. Keep it running with `tmux`, or as a systemd user service.
 
-1. Click **Export ratings** on the site → saves `ratings.json`.
-2. `.venv/bin/python run.py --import-ratings ~/Downloads/ratings.json`
+### Ratings and bookmarks
+Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them with 🔖 (`b`).
+Bookmarked and rated papers are protected from FIFO deletion. Search with `is:saved`,
+`is:rated`, `rating>=4`, or the 🔖 saved checkbox.
+
+- **On the local site** they're saved straight into the database.
+- **On GitHub Pages** they live in your browser. Click **Export ratings & bookmarks** →
+  `ratings.json`, then `.venv/bin/python run.py --import-ratings ~/Downloads/ratings.json`.
 
 Papers rated ≥ `feedback.min_rating` become positive examples in later scoring runs.
 

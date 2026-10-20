@@ -68,6 +68,13 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         help="with --site-only: build site/ but don't push to GitHub Pages",
     )
     ap.add_argument(
+        "--serve",
+        action="store_true",
+        help="serve ALL papers in the database on a local web server",
+    )
+    ap.add_argument("--host", default="127.0.0.1", help="with --serve (0.0.0.0 = whole LAN)")
+    ap.add_argument("--port", type=int, default=8000, help="with --serve")
+    ap.add_argument(
         "--rescore",
         metavar="DATE",
         help="re-run scoring/summaries/delivery for a day already in the database "
@@ -85,6 +92,11 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         cfg = yaml.safe_load(f)
     today = dt.datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
 
+    if args.serve:
+        from digest import serve
+
+        serve.serve(args.db, args.host, args.port, cfg["delivery"].get("site_title", "arXiv digest"))
+        return 0
     if args.import_ratings or args.site_only:
         con = db.connect(args.db)
         if args.import_ratings:
@@ -196,6 +208,9 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             today,
             stats,
         )
+        pruned = db.prune(con, cfg["limits"].get("db_max_papers", 0))
+        if pruned:
+            print(f"    pruned {pruned} oldest papers from the database (db_max_papers)")
         published = cfg["delivery"].get("site") and build_site(con, cfg)
         if use_discord:
             stats["on_site"] = sum(

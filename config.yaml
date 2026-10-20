@@ -65,6 +65,8 @@ limits:
   enrich_top_n: 40         # fetch arXiv HTML (affiliations + intro) for this many candidates
   summarize_top_k: 15      # Sonnet summaries for the final top K
   db_min_interest: 0       # keep papers scoring >= this in data/digest.db (0 = every scored paper, ~1 MB/day)
+  db_max_papers: 50000     # FIFO: when the DB holds more, the oldest are deleted (~450/day, so
+                           # ~110 days). Rated and bookmarked papers are never deleted. 0 = no limit.
   site_min_interest: 2     # show papers with relevance >= this on the website. Deliberately low:
                            # scores are noisy, and you can raise the cutoff in the site's score filter
   rescue_k: 5              # + up to this many papers with relevance >= rescue_min_interest that a

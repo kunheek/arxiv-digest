@@ -389,3 +389,66 @@ def test_empty_feed_notifies_but_processed_day_does_not(tmp_path, monkeypatch):
     (tmp_path / "seen.json").write_text(json.dumps(seen))
     assert run.main(args, llm=object(), fetcher=lambda *a: parse_rss(make_rss())) == 0   # all seen
     assert len(sent) == 1                                                    # stays quiet
+
+
+def _paper(pid, **kw):
+    from digest.fetch import Paper
+    return Paper(pid, f"Title {pid}", "abs", ["A B"], ["cs.CV"], "new", "l", **kw)
+
+
+def test_prune_is_fifo_and_keeps_special_papers(tmp_path):
+    from digest import db
+    con = db.connect(str(tmp_path / "d.db"))
+    for day, ids in (("2026-10-01", ["a1", "a2", "a3"]), ("2026-10-02", ["b1", "b2", "b3"]),
+                     ("2026-10-03", ["c1", "c2", "c3"])):
+        db.upsert(con, [_paper(i, final=5) for i in ids], day, {"total": 3, "cost": 0, "calls": 0})
+    db.set_rating(con, "a1", 4)          # rated → never deleted
+    db.set_bookmark(con, "b2", True)     # bookmarked → never deleted
+    assert db.prune(con, 5) == 2         # 7 ordinary papers, limit 5 → drop the 2 oldest ordinary
+    left = {r["id"] for r in con.execute("SELECT id FROM papers")}
+    assert {"a1", "b2"} <= left and not ({"a2", "a3"} & left)
+    assert {"b1", "b3", "c1", "c2", "c3"} <= left
+    assert db.prune(con, 5) == 0 and db.prune(con, 0) == 0
+    db.prune(con, 1)
+    assert "2026-10-03" in {r["date"] for r in con.execute("SELECT date FROM days")}
+    assert {"a1", "b2"} <= {r["id"] for r in con.execute("SELECT id FROM papers")}
+
+
+def test_import_bookmarks_and_ratings(tmp_path):
+    from digest import db
+    con = db.connect(str(tmp_path / "d.db"))
+    f = tmp_path / "r.json"
+    f.write_text(json.dumps({"ratings": {"x": 5}, "bookmarks": ["y"]}))
+    db.import_ratings(con, str(f))
+    assert db.ratings(con) == {"x": 5} and db.bookmarks(con) == ["y"]
+
+
+def test_local_server_serves_everything_and_saves_state(tmp_path):
+    import gzip
+    import http.server
+    import threading
+    import urllib.request
+    from digest import db, serve
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    db.upsert(con, [_paper("2610.0001", interest=0, final=0), _paper("2610.0002", interest=9, final=9)],
+              "2026-10-16", {"total": 2, "cost": 0, "calls": 0})
+    con.close()
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T"))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        idx = json.loads(gzip.decompress(urllib.request.urlopen(base + "/data/index.json").read()))
+        assert {r[0] for r in idx["papers"]} == {"2610.0001", "2610.0002"}          # includes irrelevant paper
+        shard = json.loads(urllib.request.urlopen(base + "/data/d/2026-10-16.json").read())
+        assert set(shard) == {"2610.0001", "2610.0002"}
+        post = lambda p, b: urllib.request.urlopen(urllib.request.Request(
+            base + p, json.dumps(b).encode(), {"Content-Type": "application/json"})).read()
+        post("/api/rating", {"id": "2610.0002", "rating": 5})
+        post("/api/bookmark", {"id": "2610.0001", "on": True})
+        st = json.loads(urllib.request.urlopen(base + "/api/state").read())
+        assert st == {"ratings": {"2610.0002": 5}, "bookmarks": ["2610.0001"]}
+        assert b"app.js" in urllib.request.urlopen(base + "/").read()
+        assert urllib.request.urlopen(base + "/app.js").status == 200
+    finally:
+        httpd.shutdown()

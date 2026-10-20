@@ -47,6 +47,59 @@ def _dump(path: str, obj) -> None:
         json.dump(obj, f, ensure_ascii=False, separators=(",", ":"))
 
 
+def index_row(p: dict) -> list:
+    au = [clean_name(a) for a in p["authors"]]
+    short = au if len(au) <= 8 else au[:6] + au[-2:]  # index keeps first 6 + last 2
+    return [
+        p["id"],
+        p["date"],
+        p["title"],
+        p["final"],
+        p["tags"],
+        short,
+        1 if (p["author_hits"] or p["inst_hits"]) else 0,
+        1 if p["code_url"] else 0,
+        p["categories"][:4],
+        len(au),
+        p["quality"],
+        p["impact"] or 0,
+    ]
+
+
+def index_payload(papers: list[dict], days: dict) -> dict:
+    return {
+        "papers": [index_row(p) for p in papers],
+        "days": {d: {"total": v["total"]} for d, v in days.items()},
+    }
+
+
+def shard_entry(p: dict) -> dict:
+    return {
+        "tldr": p["tldr"],
+        "why": p["why"],
+        "reason": p["reason"],
+        "qn": p["quality_note"],
+        "abs": p["abstract"],
+        "au": [clean_name(a) for a in p["authors"]],
+        "cat": p["categories"],
+        "code": p["code_url"],
+        "ah": p["author_hits"],
+        "ih": p["inst_hits"],
+    }
+
+
+def shards_for(papers: list[dict]) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for p in papers:
+        out.setdefault(p["date"], {})[p["id"]] = shard_entry(p)
+    return out
+
+
+def page_html(title: str, local: bool = False) -> str:
+    with open(os.path.join(ASSETS, "index.html")) as f:
+        return f.read().replace("{{TITLE}}", title + (" (local)" if local else ""))
+
+
 def build(
     con,
     out: str = "site",
@@ -66,49 +119,11 @@ def build(
     os.makedirs(out)
     for name in os.listdir(ASSETS):
         shutil.copy(os.path.join(ASSETS, name), out)
-    with open(os.path.join(out, "index.html")) as f:
-        html = f.read().replace("{{TITLE}}", title)
     with open(os.path.join(out, "index.html"), "w") as f:
-        f.write(html)
+        f.write(page_html(title))
     open(os.path.join(out, ".nojekyll"), "w").close()
 
-    index, shards = [], {}
-    for p in papers:
-        au = [clean_name(a) for a in p["authors"]]
-        short = au if len(au) <= 8 else au[:6] + au[-2:]  # index keeps first 6 + last 2
-        index.append(
-            [
-                p["id"],
-                p["date"],
-                p["title"],
-                p["final"],
-                p["tags"],
-                short,
-                1 if (p["author_hits"] or p["inst_hits"]) else 0,
-                1 if p["code_url"] else 0,
-                p["categories"][:4],
-                len(au),
-                p["quality"],
-                p["impact"] or 0,
-            ]
-        )
-        shard = shards.setdefault(p["date"], {})
-        shard[p["id"]] = {
-            "tldr": p["tldr"],
-            "why": p["why"],
-            "reason": p["reason"],
-            "qn": p["quality_note"],
-            "abs": p["abstract"],
-            "au": au,
-            "cat": p["categories"],
-            "code": p["code_url"],
-            "ah": p["author_hits"],
-            "ih": p["inst_hits"],
-        }
-    _dump(
-        os.path.join(out, "data", "index.json"),
-        {"papers": index, "days": {d: {"total": v["total"]} for d, v in days.items()}},
-    )
-    for day, shard in shards.items():
+    for day, shard in shards_for(papers).items():
         _dump(os.path.join(out, "data", "d", f"{day}.json"), shard)
+    _dump(os.path.join(out, "data", "index.json"), index_payload(papers, days))
     return len(papers)

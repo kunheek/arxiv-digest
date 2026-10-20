@@ -24,6 +24,9 @@ CREATE INDEX IF NOT EXISTS papers_date ON papers(date);
 CREATE TABLE IF NOT EXISTS ratings (
   id TEXT PRIMARY KEY, rating INTEGER NOT NULL, rated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id TEXT PRIMARY KEY, saved_at TEXT
+);
 CREATE TABLE IF NOT EXISTS days (
   date TEXT PRIMARY KEY, total INTEGER, cost REAL, calls INTEGER
 );
@@ -77,9 +80,12 @@ def upsert(
             )
 
 
-def all_papers(con: sqlite3.Connection) -> list[dict]:
+def all_papers(con: sqlite3.Connection, date: str | None = None) -> list[dict]:
     rows = con.execute(
-        "SELECT * FROM papers ORDER BY date DESC, final DESC, interest DESC"
+        "SELECT * FROM papers"
+        + (" WHERE date = ?" if date else "")
+        + " ORDER BY date DESC, final DESC, interest DESC",
+        (date,) if date else (),
     )
     out = []
     for r in rows:
@@ -105,14 +111,19 @@ def load_day(con: sqlite3.Connection, date: str) -> list[Paper]:
 
 
 def import_ratings(con: sqlite3.Connection, path: str) -> int:
-    """Load a ratings.json exported from the website: {"ratings": {"2610.01234": 5, ...}}.
-    A rating of 0 removes the rating."""
+    """Load a ratings.json exported from the website:
+    {"ratings": {"2610.01234": 5, ...}, "bookmarks": ["2610.01234", ...]}.
+    A rating of 0 removes the rating. Bookmarks are only ever added here (unbookmark on the
+    local site)."""
     with open(path) as f:
         data = json.load(f)
-    ratings = data.get("ratings", data)
+    ratings = data.get("ratings", data) if "ratings" in data or "bookmarks" not in data else {}
     now = dt.date.today().isoformat()
     n = 0
     with con:
+        for pid in data.get("bookmarks", []):
+            con.execute("INSERT OR IGNORE INTO bookmarks VALUES (?,?)", (pid, now))
+            n += 1
         for pid, r in ratings.items():
             r = int(r)
             if r <= 0:
@@ -141,3 +152,51 @@ def liked_titles(
         (min_rating, limit),
     )
     return [r["title"] for r in rows]
+
+
+def set_rating(con: sqlite3.Connection, pid: str, rating: int) -> None:
+    with con:
+        if rating <= 0:
+            con.execute("DELETE FROM ratings WHERE id=?", (pid,))
+        elif rating <= 5:
+            con.execute(
+                "INSERT OR REPLACE INTO ratings VALUES (?,?,?)",
+                (pid, rating, dt.date.today().isoformat()),
+            )
+
+
+def set_bookmark(con: sqlite3.Connection, pid: str, on: bool) -> None:
+    with con:
+        if on:
+            con.execute(
+                "INSERT OR IGNORE INTO bookmarks VALUES (?,?)",
+                (pid, dt.date.today().isoformat()),
+            )
+        else:
+            con.execute("DELETE FROM bookmarks WHERE id=?", (pid,))
+
+
+def bookmarks(con: sqlite3.Connection) -> list[str]:
+    return [r["id"] for r in con.execute("SELECT id FROM bookmarks")]
+
+
+def prune(con: sqlite3.Connection, max_papers: int) -> int:
+    """Keep at most `max_papers` papers, deleting the oldest first (FIFO by date).
+    Papers you rated or bookmarked are never deleted and don't count toward the limit."""
+    if not max_papers or max_papers <= 0:
+        return 0
+    special = "id IN (SELECT id FROM ratings UNION SELECT id FROM bookmarks)"
+    n = con.execute(f"SELECT COUNT(*) FROM papers WHERE NOT ({special})").fetchone()[0]
+    excess = n - max_papers
+    if excess <= 0:
+        return 0
+    with con:
+        con.execute(
+            f"DELETE FROM papers WHERE id IN (SELECT id FROM papers WHERE NOT ({special}) "
+            "ORDER BY date ASC, final ASC LIMIT ?)",
+            (excess,),
+        )
+        con.execute(
+            "DELETE FROM days WHERE date NOT IN (SELECT DISTINCT date FROM papers)"
+        )
+    return excess

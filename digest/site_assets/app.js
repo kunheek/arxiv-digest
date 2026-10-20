@@ -6,9 +6,12 @@ const PAGE = 80;
 let DATA, byDate = {}, dates = [], shards = {};
 let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 
-let ratings = {};
-try { ratings = JSON.parse(localStorage.getItem("ratings") || "{}"); } catch {}
-const saveRatings = () => { try { localStorage.setItem("ratings", JSON.stringify(ratings)); } catch {} updateExport(); };
+// Ratings and bookmarks: in the browser (GitHub Pages), or saved straight to the database
+// when served by `run.py --serve` (LOCAL).
+let ratings = {}, saved = new Set(), LOCAL = false;
+try { ratings = JSON.parse(localStorage.getItem("ratings") || "{}"); saved = new Set(JSON.parse(localStorage.getItem("saved") || "[]")); } catch {}
+const persist = () => { try { localStorage.setItem("ratings", JSON.stringify(ratings)); localStorage.setItem("saved", JSON.stringify([...saved])); } catch {} updateExport(); };
+const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
@@ -16,17 +19,17 @@ const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } ca
 function readState() {
   const h = location.hash.replace(/^#\/?/, ""), p = new URLSearchParams(h.replace(/^\?/, ""));
   return { d: p.get("d") || "", q: p.get("q") || "", min: p.get("min") || "0", sort: p.get("sort") || "",
-           w: p.get("w") === "1", c: p.get("c") === "1", a: p.get("a") === "1" };
+           w: p.get("w") === "1", c: p.get("c") === "1", a: p.get("a") === "1", s: p.get("s") === "1" };
 }
 function writeState(s, replace) {
   const p = new URLSearchParams();
   if (s.d) p.set("d", s.d); if (s.q) p.set("q", s.q); if (s.min !== "0") p.set("min", s.min);
-  if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.a) p.set("a", "1");
+  if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.a) p.set("a", "1"); if (s.s) p.set("s", "1");
   const url = "#/" + (p.toString() ? "?" + p : "");
   if (replace) history.replaceState(null, "", url); else location.hash = url;
 }
 const uiState = () => ({ d: $("#day").value, q: $("#q").value.trim(), min: $("#min").value,
-  sort: $("#sort").dataset.user ? $("#sort").value : "", w: $("#w").checked, c: $("#c").checked, a: $("#a").checked });
+  sort: $("#sort").dataset.user ? $("#sort").value : "", w: $("#w").checked, c: $("#c").checked, a: $("#a").checked, s: $("#s").checked });
 
 // ── data ───────────────────────────────────────────────────────────────
 const shard = (d) => (shards[d] ||= fetch(`data/d/${d}.json`).then((r) => r.json()).catch(() => ({})));
@@ -68,7 +71,7 @@ function matchTok(t, r, full) {
     case "has": ok = t.v === "code" ? !!r[7] : false; break;
     case "is": ok = t.v === "watch" ? !!r[6] : t.v === "top" ? r[3] >= 7
       : t.v === "landmark" ? (r[11] ?? 0) >= 7
-      : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
+      : t.v === "saved" ? saved.has(r[0]) : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
     default: {
       let hay = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase();
       if (full) hay += " " + (full.tldr + " " + full.why + " " + full.abs).toLowerCase();
@@ -82,7 +85,7 @@ function matchTok(t, r, full) {
 async function compute(s) {
   const toks = parseQuery(s.q), min = +s.min;
   let cand = s.d ? byDate[s.d] || [] : DATA.papers;
-  cand = cand.filter((r) => r[3] >= min && (!s.w || r[6]) && (!s.c || r[7]));
+  cand = cand.filter((r) => r[3] >= min && (!s.w || r[6]) && (!s.c || r[7]) && (!s.s || saved.has(r[0])));
   const free = toks.filter((t) => t.k === "free" && !t.neg);
   cand = cand.filter((r) => toks.filter((t) => t.k !== "free").every((t) => matchTok(t, r)));
   freeTerms = free.map((t) => t.v);
@@ -122,7 +125,7 @@ function rowHTML(r, i, showDate) {
     <div class="main">
       <a class="t" href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${hl(title)}</a>
       <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}${(r[11] ?? 0) >= 7 ? ' <span title="big / foundational paper (field-wide impact ' + r[11].toFixed(0) + ')">📌</span>' : ""}</span>
-      <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span>
+      <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span><button class="bm${saved.has(id) ? " on" : ""}" title="bookmark (b)">🔖</button>
       <span class="fa">${esc(authorsShort(r, 1))}</span>
       <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span> · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
       <div class="det"></div>
@@ -148,16 +151,24 @@ const starsHTML = (id) => "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
   `<button class="star${(ratings[id] || 0) >= n ? " on" : ""}" data-n="${n}" title="${n} (key ${n})">★</button>`).join("");
 function rate(id, n) {
   if (!n || ratings[id] === n) delete ratings[id]; else ratings[id] = n;
-  saveRatings();
+  persist();
+  if (LOCAL) post("api/rating", { id, rating: ratings[id] || 0 });
   document.querySelectorAll(".r").forEach((el) => {
     const r = rows[+el.dataset.i]; if (!r || r[0] !== id) return;
     el.querySelector(".rb").textContent = ratings[id] ? "★" + ratings[id] : "";
     const st = el.querySelector(".stars"); if (st) st.innerHTML = starsHTML(id);
   });
 }
-function updateExport() { const n = Object.keys(ratings).length; $("#export").textContent = `Export ratings (${n})`; $("#export").hidden = !n; }
+function bookmark(id) {
+  const on = !saved.has(id); on ? saved.add(id) : saved.delete(id);
+  persist();
+  if (LOCAL) post("api/bookmark", { id, on });
+  document.querySelectorAll(".r").forEach((el) => { const r = rows[+el.dataset.i]; if (r && r[0] === id) el.querySelector(".bm").classList.toggle("on", on); });
+}
+function updateExport() {
+  if (LOCAL) { $("#export").hidden = true; return; } const n = Object.keys(ratings).length + saved.size; $("#export").textContent = `Export ratings & bookmarks (${n})`; $("#export").hidden = !n; }
 $("#export").onclick = () => {
-  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), ratings }, null, 1)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), ratings, bookmarks: [...saved] }, null, 1)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ratings.json"; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
@@ -209,7 +220,7 @@ function syncControls(s) {
   const day = $("#day");
   if (!day.dataset.built) { day.innerHTML = ds.map((d) => `<option value="${d}">${d || "all days"}</option>`).join(""); day.dataset.built = 1; }
   day.value = s.d; $("#min").value = s.min; $("#q").value !== s.q && document.activeElement !== $("#q") && ($("#q").value = s.q);
-  $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#a").checked = s.a;
+  $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#a").checked = s.a; $("#s").checked = s.s;
 }
 function setDensity(v) {
   document.body.className = "dens-" + v; store.set("dens", v);
@@ -218,7 +229,7 @@ function setDensity(v) {
 
 // ── events ─────────────────────────────────────────────────────────────
 const push = (replace) => { writeState(uiState(), replace); if (replace) view(true); };
-["day", "min", "w", "c", "a"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
+["day", "min", "w", "c", "a", "s"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
 $("#sort").addEventListener("change", (e) => { e.target.dataset.user = 1; push(false); });
 $("#q").addEventListener("input", () => { clearTimeout(view.t); view.t = setTimeout(() => push(true), 200); });
 window.addEventListener("hashchange", () => { $("#sort").dataset.user = readState().sort ? 1 : ""; view(); });
@@ -230,6 +241,8 @@ $("#dens").addEventListener("click", (e) => {
 $("#help").onclick = () => $("#helpbox").showModal();
 $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const bm = e.target.closest(".bm");
+  if (bm) return bookmark(rows[+bm.closest(".r").dataset.i][0]);
   const st = e.target.closest(".star");
   if (st) return rate(st.parentElement.dataset.id, +st.dataset.n);
   const tag = e.target.closest(".tag");
@@ -258,6 +271,7 @@ document.addEventListener("keydown", (e) => {
     case "o": if (at) window.open(at.querySelector(".t").href, "_blank", "noopener"); break;
     case "e": { const all = [...els].some((x) => !x.classList.contains("open")); els.forEach((x) => open(x, all)); break; }
     case "[": case "]": { const i = day(); if (i < 0) break; const n = dates[i + (e.key === "[" ? 1 : -1)]; if (n) { $("#day").value = n; push(false); } break; }
+    case "b": if (at) bookmark(rows[+at.dataset.i][0]); break;
     case "?": $("#helpbox").showModal(); break;
     default: if (at && /^[0-5]$/.test(e.key)) rate(rows[+at.dataset.i][0], +e.key);
   }
@@ -267,7 +281,10 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.leng
 // ── boot ───────────────────────────────────────────────────────────────
 setDensity(store.get("dens", "compact"));
 updateExport();
-fetch("data/index.json").then((r) => r.json()).then((d) => {
+fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
+  if (st && st.ratings) { LOCAL = true; ratings = st.ratings; saved = new Set(st.bookmarks); updateExport(); document.title += " ·local"; }
+  return fetch("data/index.json");
+}).then((r) => r.json()).then((d) => {
   DATA = d;
   for (const r of d.papers) (byDate[r[1]] ||= []).push(r);
   dates = Object.keys(byDate).sort().reverse();
