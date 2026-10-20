@@ -63,9 +63,12 @@ root). Public unless your plan supports private Pages. Controlled by `delivery.s
 - **Scale:** visitors load one compact index plus one small file per day they open.
 - **Database:** `data/digest.db` (git-ignored, back it up) keeps every scored paper
   (`limits.db_min_interest`). **FIFO limit:** when it holds more than `limits.db_max_papers`
-  (default 50,000 ≈ 110 days), the oldest papers are deleted. Papers you rated or bookmarked
-  are never deleted. The public site shows only papers with relevance ≥
-  `limits.site_min_interest` (or high impact).
+  (default 300,000 ≈ 2.5 years, ~650 MB), the oldest papers are deleted. Papers you rated or bookmarked
+  are never deleted. The database never leaves your machine (git-ignored; only the generated
+  `site/` files are pushed). The public site is a separate, smaller view: papers with relevance
+  ≥ `limits.site_min_interest` (or high impact), newest `limits.site_max_papers` (default
+  6,000 ≈ 65 days), so GitHub Pages stays small while the local DB and local site keep the
+  full history.
 
 ### Local site (all papers)
 ```bash

@@ -38,6 +38,7 @@ def build_site(con, cfg: dict, publish_it: bool = True) -> bool:
         d.get("site_title", "arXiv digest"),
         cfg["limits"].get("site_min_interest", 2),
         cfg["ranking"].get("impact_min", 7) - 1,
+        cfg["limits"].get("site_max_papers", 0),
     )
     print(f"    built site/ with {n} papers")
     if publish_it and d.get("publish"):

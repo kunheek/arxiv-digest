@@ -452,3 +452,17 @@ def test_local_server_serves_everything_and_saves_state(tmp_path):
         assert urllib.request.urlopen(base + "/app.js").status == 200
     finally:
         httpd.shutdown()
+
+
+def test_public_site_is_capped_but_db_is_not(tmp_path):
+    from digest import db, site
+    con = db.connect(str(tmp_path / "d.db"))
+    for i, day in enumerate(["2026-10-01", "2026-10-02", "2026-10-03"]):
+        db.upsert(con, [_paper(f"2610.0{i}00{j}", interest=5, final=5) for j in range(2)], day,
+                  {"total": 2, "cost": 0, "calls": 0})
+    out = str(tmp_path / "site")
+    assert site.build(con, out, "T", 2, 11, max_papers=4) == 4          # newest 4 of 6
+    idx = json.load(open(os.path.join(out, "data", "index.json")))
+    assert {r[1] for r in idx["papers"]} == {"2026-10-02", "2026-10-03"}
+    assert con.execute("SELECT COUNT(*) FROM papers").fetchone()[0] == 6   # DB untouched
+    assert not any(f.endswith(".db") for _, _, fs in os.walk(out) for f in fs)
