@@ -446,8 +446,9 @@ def test_local_server_serves_everything_and_saves_state(tmp_path):
             base + p, json.dumps(b).encode(), {"Content-Type": "application/json"})).read()
         post("/api/rating", {"id": "2610.0002", "rating": 5})
         post("/api/bookmark", {"id": "2610.0001", "on": True})
+        post("/api/like", {"id": "2610.0002", "on": True})
         st = json.loads(urllib.request.urlopen(base + "/api/state").read())
-        assert st == {"ratings": {"2610.0002": 5}, "bookmarks": ["2610.0001"]}
+        assert st == {"ratings": {"2610.0002": 5}, "bookmarks": ["2610.0001"], "likes": ["2610.0002"]}
         assert b"app.js" in urllib.request.urlopen(base + "/").read()
         assert urllib.request.urlopen(base + "/app.js").status == 200
     finally:
@@ -479,7 +480,21 @@ def test_public_site_mirrors_local_preferences(tmp_path):
     out = str(tmp_path / "site")
     site.build(con, out, "T", 2, 11, max_papers=2)
     prefs = json.load(open(os.path.join(out, "data", "prefs.json")))
-    assert prefs == {"ratings": {"2610.00000": 5}, "bookmarks": ["2610.00001"]}
+    assert prefs == {"ratings": {"2610.00000": 5}, "bookmarks": ["2610.00001"], "likes": []}
     idx = json.load(open(os.path.join(out, "data", "index.json")))
     assert {"2610.00000", "2610.00001"} <= {r[0] for r in idx["papers"]}
     assert "export" not in open(os.path.join(out, "index.html")).read().lower()
+
+
+def test_likes_protected_and_used_as_examples(tmp_path):
+    from digest import db
+    con = db.connect(str(tmp_path / "d.db"))
+    db.upsert(con, [_paper("2610.00001"), _paper("2610.00002")], "2026-10-01",
+              {"total": 2, "cost": 0, "calls": 0})
+    db.set_like(con, "2610.00001", True)
+    assert db.likes(con) == ["2610.00001"]
+    assert len(db.liked_titles(con)) == 1
+    db.prune(con, 1)
+    assert con.execute("SELECT COUNT(*) FROM papers WHERE id='2610.00001'").fetchone()[0] == 1
+    db.set_like(con, "2610.00001", False)
+    assert db.likes(con) == []

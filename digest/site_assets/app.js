@@ -9,7 +9,7 @@ let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 // Ratings and bookmarks are set only on the local server (`run.py --serve`, LOCAL) and saved to
 // the database. The public GitHub Pages site is read-only: it shows the same picks, published
 // from the database as data/prefs.json.
-let ratings = {}, saved = new Set(), LOCAL = false;
+let ratings = {}, saved = new Set(), liked = new Set(), LOCAL = false;
 const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -70,7 +70,7 @@ function matchTok(t, r, full) {
     case "has": ok = t.v === "code" ? !!r[7] : false; break;
     case "is": ok = t.v === "watch" ? !!r[6] : t.v === "top" ? r[3] >= 7
       : t.v === "landmark" ? (r[11] ?? 0) >= 7
-      : t.v === "saved" ? saved.has(r[0]) : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
+      : t.v === "saved" ? saved.has(r[0]) : t.v === "liked" ? liked.has(r[0]) : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
     default: {
       let hay = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase();
       if (full) hay += " " + (full.tldr + " " + full.why + " " + full.abs).toLowerCase();
@@ -124,7 +124,7 @@ function rowHTML(r, i, showDate) {
     <div class="main">
       <a class="t" href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${hl(title)}</a>
       <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}${(r[11] ?? 0) >= 7 ? ' <span title="big / foundational paper (field-wide impact ' + r[11].toFixed(0) + ')">📌</span>' : ""}</span>
-      <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span><button class="bm${saved.has(id) ? " on" : ""}" title="bookmark (b)">🔖</button>
+      <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span><button class="lk${liked.has(id) ? " on" : ""}" title="like (l)">♥</button><button class="bm${saved.has(id) ? " on" : ""}" title="bookmark (b)">🔖</button>
       <span class="fa">${esc(authorsShort(r, 1))}</span>
       <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span> · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
       <div class="det"></div>
@@ -157,6 +157,12 @@ function rate(id, n) {
     el.querySelector(".rb").textContent = ratings[id] ? "★" + ratings[id] : "";
     const st = el.querySelector(".stars"); if (st) st.innerHTML = starsHTML(id);
   });
+}
+function like(id) {
+  if (!LOCAL) return;
+  const on = !liked.has(id); on ? liked.add(id) : liked.delete(id);
+  post("api/like", { id, on });
+  document.querySelectorAll(".r").forEach((el) => { const r = rows[+el.dataset.i]; if (r && r[0] === id) el.querySelector(".lk").classList.toggle("on", on); });
 }
 function bookmark(id) {
   if (!LOCAL) return;
@@ -233,6 +239,8 @@ $("#dens").addEventListener("click", (e) => {
 $("#help").onclick = () => $("#helpbox").showModal();
 $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const lk = e.target.closest(".lk");
+  if (lk) return like(rows[+lk.closest(".r").dataset.i][0]);
   const bm = e.target.closest(".bm");
   if (bm) return bookmark(rows[+bm.closest(".r").dataset.i][0]);
   const st = e.target.closest(".star");
@@ -263,6 +271,7 @@ document.addEventListener("keydown", (e) => {
     case "o": if (at) window.open(at.querySelector(".t").href, "_blank", "noopener"); break;
     case "e": { const all = [...els].some((x) => !x.classList.contains("open")); els.forEach((x) => open(x, all)); break; }
     case "[": case "]": { const i = day(); if (i < 0) break; const n = dates[i + (e.key === "[" ? 1 : -1)]; if (n) { $("#day").value = n; push(false); } break; }
+    case "l": if (at) like(rows[+at.dataset.i][0]); break;
     case "b": if (at) bookmark(rows[+at.dataset.i][0]); break;
     case "?": $("#helpbox").showModal(); break;
     default: if (at && /^[0-5]$/.test(e.key)) rate(rows[+at.dataset.i][0], +e.key);
@@ -273,10 +282,10 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.leng
 // ── boot ───────────────────────────────────────────────────────────────
 setDensity(store.get("dens", "compact"));
 fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
-  if (st && st.ratings) { LOCAL = true; ratings = st.ratings; saved = new Set(st.bookmarks); document.title += " ·local"; return; }
+  if (st && st.ratings) { LOCAL = true; ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local"; return; }
   document.body.classList.add("ro");  // public site: read-only mirror of the local picks
   return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
-    .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); } });
+    .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); liked = new Set(pf.likes || []); } });
 }).then(() => fetch("data/index.json")).then((r) => r.json()).then((d) => {
   DATA = d;
   for (const r of d.papers) (byDate[r[1]] ||= []).push(r);

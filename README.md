@@ -81,8 +81,8 @@ database, so no export is needed. Keep it running with `tmux`, or as a systemd u
 
 ### Ratings and bookmarks
 Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them with 🔖 (`b`).
-Bookmarked and rated papers are protected from FIFO deletion. Search with `is:saved`,
-`is:rated`, `rating>=4`, or the 🔖 saved checkbox.
+Like with ♥ (`l`). Liked, bookmarked and rated papers are protected from FIFO deletion. Search with `is:saved`,
+`is:liked`, `is:rated`, `rating>=4`, or the 🔖 saved checkbox. Likes (and ratings ≥ `feedback.min_rating`) become positive examples for scoring.
 
 - **Only the local site can change them**; they're saved straight into the database.
 - **GitHub Pages is read-only.** Each publish includes `data/prefs.json` (your ratings and

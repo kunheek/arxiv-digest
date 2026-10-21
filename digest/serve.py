@@ -80,7 +80,7 @@ def make_handler(db_path: str, title: str):
                 con = db.connect(db_path)
                 try:
                     return self._json(
-                        {"ratings": db.ratings(con), "bookmarks": db.bookmarks(con)}
+                        {"ratings": db.ratings(con), "bookmarks": db.bookmarks(con), "likes": db.likes(con)}
                     )
                 finally:
                     con.close()
@@ -103,6 +103,8 @@ def make_handler(db_path: str, title: str):
                 try:
                     if self.path == "/api/rating":
                         db.set_rating(con, pid, int(body.get("rating", 0)))
+                    elif self.path == "/api/like":
+                        db.set_like(con, pid, bool(body.get("on")))
                     elif self.path == "/api/bookmark":
                         db.set_bookmark(con, pid, bool(body.get("on")))
                     else:

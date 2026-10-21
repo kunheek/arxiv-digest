@@ -115,11 +115,11 @@ def build(
         for p in db.all_papers(con)
         if p["interest"] >= min_interest or (p["impact"] or 0) >= min_impact
     ]
-    rated, saved = db.ratings(con), set(db.bookmarks(con))
+    rated, saved, liked = db.ratings(con), set(db.bookmarks(con)), set(db.likes(con))
     if max_papers > 0:  # all_papers() is newest first, so this keeps the most recent ones
         # ...plus everything you rated or bookmarked, so the public view mirrors your picks
         papers = [
-            p for i, p in enumerate(papers) if i < max_papers or p["id"] in rated or p["id"] in saved
+            p for i, p in enumerate(papers) if i < max_papers or p["id"] in rated or p["id"] in saved or p["id"] in liked
         ]
     days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
     if os.path.isdir(out):
@@ -141,6 +141,7 @@ def build(
         {
             "ratings": {i: r for i, r in rated.items() if i in ids},
             "bookmarks": sorted(saved & ids),
+            "likes": sorted(liked & ids),
         },
     )
     return len(papers)

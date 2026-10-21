@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS ratings (
 CREATE TABLE IF NOT EXISTS bookmarks (
   id TEXT PRIMARY KEY, saved_at TEXT
 );
+CREATE TABLE IF NOT EXISTS likes (
+  id TEXT PRIMARY KEY, liked_at TEXT
+);
 CREATE TABLE IF NOT EXISTS days (
   date TEXT PRIMARY KEY, total INTEGER, cost REAL, calls INTEGER
 );
@@ -147,8 +150,10 @@ def liked_titles(
 ) -> list[str]:
     """Titles of papers you rated highly (newest first) → extra positive examples for scoring."""
     rows = con.execute(
-        "SELECT p.title FROM ratings r JOIN papers p ON p.id = r.id "
-        "WHERE r.rating >= ? ORDER BY r.rated_at DESC, p.date DESC LIMIT ?",
+        "SELECT p.title FROM papers p JOIN ("
+        "  SELECT id, rated_at AS at FROM ratings WHERE rating >= ?"
+        "  UNION SELECT id, liked_at FROM likes"
+        ") x ON x.id = p.id ORDER BY x.at DESC, p.date DESC LIMIT ?",
         (min_rating, limit),
     )
     return [r["title"] for r in rows]
@@ -176,16 +181,31 @@ def set_bookmark(con: sqlite3.Connection, pid: str, on: bool) -> None:
             con.execute("DELETE FROM bookmarks WHERE id=?", (pid,))
 
 
+def set_like(con: sqlite3.Connection, pid: str, on: bool) -> None:
+    with con:
+        if on:
+            con.execute(
+                "INSERT OR IGNORE INTO likes VALUES (?,?)",
+                (pid, dt.date.today().isoformat()),
+            )
+        else:
+            con.execute("DELETE FROM likes WHERE id=?", (pid,))
+
+
+def likes(con: sqlite3.Connection) -> list[str]:
+    return [r["id"] for r in con.execute("SELECT id FROM likes")]
+
+
 def bookmarks(con: sqlite3.Connection) -> list[str]:
     return [r["id"] for r in con.execute("SELECT id FROM bookmarks")]
 
 
 def prune(con: sqlite3.Connection, max_papers: int) -> int:
     """Keep at most `max_papers` papers, deleting the oldest first (FIFO by date).
-    Papers you rated or bookmarked are never deleted and don't count toward the limit."""
+    Papers you rated, liked or bookmarked are never deleted and don't count toward the limit."""
     if not max_papers or max_papers <= 0:
         return 0
-    special = "id IN (SELECT id FROM ratings UNION SELECT id FROM bookmarks)"
+    special = "id IN (SELECT id FROM ratings UNION SELECT id FROM bookmarks UNION SELECT id FROM likes)"
     n = con.execute(f"SELECT COUNT(*) FROM papers WHERE NOT ({special})").fetchone()[0]
     excess = n - max_papers
     if excess <= 0:
