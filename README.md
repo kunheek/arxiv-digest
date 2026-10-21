@@ -84,9 +84,11 @@ Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them 
 Bookmarked and rated papers are protected from FIFO deletion. Search with `is:saved`,
 `is:rated`, `rating>=4`, or the 🔖 saved checkbox.
 
-- **On the local site** they're saved straight into the database.
-- **On GitHub Pages** they live in your browser. Click **Export ratings & bookmarks** →
-  `ratings.json`, then `.venv/bin/python run.py --import-ratings ~/Downloads/ratings.json`.
+- **Only the local site can change them**; they're saved straight into the database.
+- **GitHub Pages is read-only.** Each publish includes `data/prefs.json` (your ratings and
+  bookmarks) so the public site shows the same picks, and rated/bookmarked papers are always
+  included even beyond `site_max_papers`. To push new picks right away instead of waiting for the
+  next run: `.venv/bin/python run.py --site-only`.
 
 Papers rated ≥ `feedback.min_rating` become positive examples in later scoring runs.
 

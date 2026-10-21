@@ -466,3 +466,20 @@ def test_public_site_is_capped_but_db_is_not(tmp_path):
     assert {r[1] for r in idx["papers"]} == {"2026-10-02", "2026-10-03"}
     assert con.execute("SELECT COUNT(*) FROM papers").fetchone()[0] == 6   # DB untouched
     assert not any(f.endswith(".db") for _, _, fs in os.walk(out) for f in fs)
+
+
+def test_public_site_mirrors_local_preferences(tmp_path):
+    from digest import db, site
+    con = db.connect(str(tmp_path / "d.db"))
+    for i, day in enumerate(["2026-10-01", "2026-10-02", "2026-10-03"]):
+        db.upsert(con, [_paper(f"2610.0{i}00{j}", interest=5, final=5) for j in range(2)], day,
+                  {"total": 2, "cost": 0, "calls": 0})
+    db.set_rating(con, "2610.00000", 5)       # oldest day: outside the cap, but rated
+    db.set_bookmark(con, "2610.00001", True)
+    out = str(tmp_path / "site")
+    site.build(con, out, "T", 2, 11, max_papers=2)
+    prefs = json.load(open(os.path.join(out, "data", "prefs.json")))
+    assert prefs == {"ratings": {"2610.00000": 5}, "bookmarks": ["2610.00001"]}
+    idx = json.load(open(os.path.join(out, "data", "index.json")))
+    assert {"2610.00000", "2610.00001"} <= {r[0] for r in idx["papers"]}
+    assert "export" not in open(os.path.join(out, "index.html")).read().lower()

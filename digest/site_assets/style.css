@@ -78,3 +78,5 @@ code,kbd{background:var(--lobg);border-radius:4px;padding:0 .3rem;font-size:.82r
 .star.on{color:var(--star)}.star:hover{color:var(--star)}
 .bm{border:0;background:none;cursor:pointer;font-size:.85rem;padding:0 .2rem;margin-left:.2rem;opacity:.2;filter:grayscale(1)}
 .bm:hover{opacity:.6}.bm.on{opacity:1;filter:none}
+
+.ro .bm:not(.on){display:none}.ro .bm{pointer-events:none}

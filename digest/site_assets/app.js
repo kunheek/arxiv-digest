@@ -6,11 +6,10 @@ const PAGE = 80;
 let DATA, byDate = {}, dates = [], shards = {};
 let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 
-// Ratings and bookmarks: in the browser (GitHub Pages), or saved straight to the database
-// when served by `run.py --serve` (LOCAL).
+// Ratings and bookmarks are set only on the local server (`run.py --serve`, LOCAL) and saved to
+// the database. The public GitHub Pages site is read-only: it shows the same picks, published
+// from the database as data/prefs.json.
 let ratings = {}, saved = new Set(), LOCAL = false;
-try { ratings = JSON.parse(localStorage.getItem("ratings") || "{}"); saved = new Set(JSON.parse(localStorage.getItem("saved") || "[]")); } catch {}
-const persist = () => { try { localStorage.setItem("ratings", JSON.stringify(ratings)); localStorage.setItem("saved", JSON.stringify([...saved])); } catch {} updateExport(); };
 const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -147,12 +146,12 @@ async function fillDet(el) {
     `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)} · Impact ${(r[11] ?? 0).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
     (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>`;
 }
-const starsHTML = (id) => "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
+const starsHTML = (id) => !LOCAL ? (ratings[id] ? "Your rating: " + "★".repeat(ratings[id]) : "") : "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
   `<button class="star${(ratings[id] || 0) >= n ? " on" : ""}" data-n="${n}" title="${n} (key ${n})">★</button>`).join("");
 function rate(id, n) {
+  if (!LOCAL) return;
   if (!n || ratings[id] === n) delete ratings[id]; else ratings[id] = n;
-  persist();
-  if (LOCAL) post("api/rating", { id, rating: ratings[id] || 0 });
+  post("api/rating", { id, rating: ratings[id] || 0 });
   document.querySelectorAll(".r").forEach((el) => {
     const r = rows[+el.dataset.i]; if (!r || r[0] !== id) return;
     el.querySelector(".rb").textContent = ratings[id] ? "★" + ratings[id] : "";
@@ -160,18 +159,11 @@ function rate(id, n) {
   });
 }
 function bookmark(id) {
+  if (!LOCAL) return;
   const on = !saved.has(id); on ? saved.add(id) : saved.delete(id);
-  persist();
-  if (LOCAL) post("api/bookmark", { id, on });
+  post("api/bookmark", { id, on });
   document.querySelectorAll(".r").forEach((el) => { const r = rows[+el.dataset.i]; if (r && r[0] === id) el.querySelector(".bm").classList.toggle("on", on); });
 }
-function updateExport() {
-  if (LOCAL) { $("#export").hidden = true; return; } const n = Object.keys(ratings).length + saved.size; $("#export").textContent = `Export ratings & bookmarks (${n})`; $("#export").hidden = !n; }
-$("#export").onclick = () => {
-  const blob = new Blob([JSON.stringify({ exported: new Date().toISOString(), ratings, bookmarks: [...saved] }, null, 1)], { type: "application/json" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "ratings.json"; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
 const open = (el, on) => { el.classList.toggle("open", on ?? !el.classList.contains("open")); if (el.classList.contains("open")) fillDet(el); };
 
 async function renderMore() {
@@ -280,11 +272,12 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.leng
 
 // ── boot ───────────────────────────────────────────────────────────────
 setDensity(store.get("dens", "compact"));
-updateExport();
 fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
-  if (st && st.ratings) { LOCAL = true; ratings = st.ratings; saved = new Set(st.bookmarks); updateExport(); document.title += " ·local"; }
-  return fetch("data/index.json");
-}).then((r) => r.json()).then((d) => {
+  if (st && st.ratings) { LOCAL = true; ratings = st.ratings; saved = new Set(st.bookmarks); document.title += " ·local"; return; }
+  document.body.classList.add("ro");  // public site: read-only mirror of the local picks
+  return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); } });
+}).then(() => fetch("data/index.json")).then((r) => r.json()).then((d) => {
   DATA = d;
   for (const r of d.papers) (byDate[r[1]] ||= []).push(r);
   dates = Object.keys(byDate).sort().reverse();

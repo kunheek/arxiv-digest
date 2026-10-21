@@ -115,8 +115,12 @@ def build(
         for p in db.all_papers(con)
         if p["interest"] >= min_interest or (p["impact"] or 0) >= min_impact
     ]
+    rated, saved = db.ratings(con), set(db.bookmarks(con))
     if max_papers > 0:  # all_papers() is newest first, so this keeps the most recent ones
-        papers = papers[:max_papers]
+        # ...plus everything you rated or bookmarked, so the public view mirrors your picks
+        papers = [
+            p for i, p in enumerate(papers) if i < max_papers or p["id"] in rated or p["id"] in saved
+        ]
     days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
     if os.path.isdir(out):
         shutil.rmtree(out)
@@ -130,4 +134,13 @@ def build(
     for day, shard in shards_for(papers).items():
         _dump(os.path.join(out, "data", "d", f"{day}.json"), shard)
     _dump(os.path.join(out, "data", "index.json"), index_payload(papers, days))
+    # Read-only mirror of the preferences you set on the local site (ids on this site only).
+    ids = {p["id"] for p in papers}
+    _dump(
+        os.path.join(out, "data", "prefs.json"),
+        {
+            "ratings": {i: r for i, r in rated.items() if i in ids},
+            "bookmarks": sorted(saved & ids),
+        },
+    )
     return len(papers)
