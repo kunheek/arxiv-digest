@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS bookmarks (
 CREATE TABLE IF NOT EXISTS likes (
   id TEXT PRIMARY KEY, liked_at TEXT
 );
+CREATE TABLE IF NOT EXISTS vectors (
+  id TEXT PRIMARY KEY, vec BLOB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS days (
   date TEXT PRIMARY KEY, total INTEGER, cost REAL, calls INTEGER
 );
@@ -216,6 +219,7 @@ def prune(con: sqlite3.Connection, max_papers: int) -> int:
             "ORDER BY date ASC, final ASC LIMIT ?)",
             (excess,),
         )
+        con.execute("DELETE FROM vectors WHERE id NOT IN (SELECT id FROM papers)")
         con.execute(
             "DELETE FROM days WHERE date NOT IN (SELECT DISTINCT date FROM papers)"
         )

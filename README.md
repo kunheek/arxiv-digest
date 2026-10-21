@@ -92,6 +92,19 @@ Like with ♥ (`l`). Liked, bookmarked and rated papers are protected from FIFO 
 
 Papers rated ≥ `feedback.min_rating` become positive examples in later scoring runs.
 
+### Embeddings (local only)
+Every paper is embedded on your CPU with `fastembed` (`BAAI/bge-small-en-v1.5`, 384-d, stored as
+float16 in the `vectors` table, never published). The local site uses them for:
+- **Show similar papers** in an expanded row, and a **"for you ♥"** sort with a ♥0–10 taste badge:
+  closeness to what you liked / bookmarked / rated ≥ 4 (minus what you rated ≤ 2).
+  Needs at least 3 picks.
+- New papers are embedded at the end of each daily run. Backfill the whole DB once with
+  `.venv/bin/python run.py --embed-backfill` (≈1.5 min per 2,000 papers).
+- `.venv/bin/python run.py --eval-taste` tests, on your own picks, whether the taste score ranks
+  them above other papers better than Sonnet's score does (needs ≥ 8 picks).
+
+The taste score is not mixed into the daily ranking: Sonnet still decides what gets summarized.
+
 ## Tuning (`config.yaml`)
 - **`interest_profile`** matters most. Be specific about what's core, adjacent and unwanted.
 - **`seed_papers`** are titles that are "exactly my taste".

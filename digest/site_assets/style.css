@@ -83,3 +83,4 @@ code,kbd{background:var(--lobg);border-radius:4px;padding:0 .3rem;font-size:.82r
 @media (prefers-color-scheme:dark){.lk.on{background:#4a1d2b;border-color:#e0526d;color:#ff7a9c}}
 
 .ro .bm:not(.on),.ro .lk:not(.on){display:none}.ro .bm,.ro .lk{pointer-events:none}
+.sim ul{margin:.2rem 0 0 1.1rem;padding:0}.sim li{margin:.1rem 0}.simbtn{border:1px solid var(--line);background:var(--surface);color:var(--mute);border-radius:6px;font-size:.75rem;padding:.1rem .45rem;cursor:pointer}.mute{color:var(--mute)}

@@ -38,6 +38,11 @@ class _Cache:
             return self.gz
 
 
+def _brief(con, pid: str) -> dict:
+    r = con.execute("SELECT title, date FROM papers WHERE id=?", (pid,)).fetchone()
+    return {"title": r["title"], "date": r["date"]} if r else {}
+
+
 def make_handler(db_path: str, title: str):
     cache = _Cache(db_path)
     page = site.page_html(title, local=True).encode()
@@ -82,6 +87,20 @@ def make_handler(db_path: str, title: str):
                     return self._json(
                         {"ratings": db.ratings(con), "bookmarks": db.bookmarks(con), "likes": db.likes(con)}
                     )
+                finally:
+                    con.close()
+            if path in ("/api/taste", "/api/similar"):
+                from urllib.parse import parse_qs, urlparse
+
+                q = parse_qs(urlparse(self.path).query)
+                con = db.connect(db_path)
+                try:
+                    from . import embed
+
+                    if path == "/api/taste":
+                        return self._json(embed.taste_scores(con))
+                    pid = q.get("id", [""])[0]
+                    return self._json([{"id": i, "sim": s, **(_brief(con, i))} for i, s in embed.similar(con, pid)])
                 finally:
                     con.close()
             name = os.path.basename(path)

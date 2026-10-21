@@ -8,6 +8,8 @@ Free modes (no arXiv, no Claude):
   python run.py --site-only [--no-publish]   # rebuild (and publish) the website from the DB
   python run.py --rescore 2026-10-16         # re-run scoring for a day already in the DB
   python run.py --import-ratings FILE        # load ratings.json exported from the website
+  python run.py --embed-backfill             # embed every paper in the DB (local, CPU)
+  python run.py --eval-taste                 # does the embedding taste score beat Sonnet's?
 """
 
 from __future__ import annotations
@@ -86,6 +88,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         metavar="FILE",
         help="load ratings exported from the website into the database",
     )
+    ap.add_argument("--embed-backfill", action="store_true", help="embed all papers lacking a vector")
+    ap.add_argument("--eval-taste", action="store_true", help="compare Sonnet's score with the embedding taste score")
     args = ap.parse_args(argv)
 
     load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
@@ -97,6 +101,15 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         from digest import serve
 
         serve.serve(args.db, args.host, args.port, cfg["delivery"].get("site_title", "arXiv digest"))
+        return 0
+    if args.embed_backfill or args.eval_taste:
+        from digest import embed
+
+        con = db.connect(args.db)
+        if args.embed_backfill:
+            print(f"embedded {embed.embed_missing(con)} papers")
+        if args.eval_taste:
+            print(embed.evaluate(con))
         return 0
     if args.import_ratings or args.site_only:
         con = db.connect(args.db)
@@ -209,6 +222,12 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             today,
             stats,
         )
+        try:  # vectors power "similar papers"/taste on the local site; never fail the run over them
+            from digest import embed
+
+            embed.embed_missing(con)
+        except Exception as e:  # noqa: BLE001
+            print(f"    (embedding skipped: {e})")
         pruned = db.prune(con, cfg["limits"].get("db_max_papers", 0))
         if pruned:
             print(f"    pruned {pruned} oldest papers from the database (db_max_papers)")

@@ -9,7 +9,7 @@ let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 // Ratings and bookmarks are set only on the local server (`run.py --serve`, LOCAL) and saved to
 // the database. The public GitHub Pages site is read-only: it shows the same picks, published
 // from the database as data/prefs.json.
-let ratings = {}, saved = new Set(), liked = new Set(), LOCAL = false;
+let ratings = {}, saved = new Set(), liked = new Set(), taste = {}, LOCAL = false;
 const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
@@ -99,7 +99,8 @@ async function compute(s) {
     } else cand = cand.filter((r) => fts.every((t) => matchTok(t, r)));
   }
   const sort = s.sort || (s.d ? "score" : "new");
-  cand = cand.slice().sort(sort === "score" ? (a, b) => b[3] - a[3] || (a[1] < b[1] ? 1 : -1)
+  cand = cand.slice().sort(sort === "taste" ? (a, b) => (taste[b[0]] ?? -1) - (taste[a[0]] ?? -1) || b[3] - a[3]
+    : sort === "score" ? (a, b) => b[3] - a[3] || (a[1] < b[1] ? 1 : -1)
     : sort === "old" ? (a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : b[3] - a[3])
     : (a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : b[3] - a[3]));
   return cand;
@@ -126,7 +127,7 @@ function rowHTML(r, i, showDate) {
       <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}${(r[11] ?? 0) >= 7 ? ' <span title="big / foundational paper (field-wide impact ' + r[11].toFixed(0) + ')">📌</span>' : ""}</span>
       <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span><button class="lk${liked.has(id) ? " on" : ""}" title="like (l)">♥</button><button class="bm${saved.has(id) ? " on" : ""}" title="bookmark (b)">🔖</button>
       <span class="fa">${esc(authorsShort(r, 1))}</span>
-      <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span> · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
+      <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span>${taste[id] != null ? ` · <span title="how close to the papers you liked (0-10, local embeddings)">♥${taste[id].toFixed(0)}</span>` : ""} · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
       <div class="det"></div>
     </div>
     <div class="side">${showDate ? `<a href="#/?d=${date}" style="color:inherit">${date.slice(5)}</a> · ` : ""}${esc(cats[0] || "")}</div></article>`;
@@ -144,7 +145,8 @@ async function fillDet(el) {
     (d.why ? `<p class="why"><b>Why you</b>${esc(d.why)}</p>` : "") +
     (badges ? `<p>${badges}</p>` : "") +
     `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)} · Impact ${(r[11] ?? 0).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
-    (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>`;
+    (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>` +
+    (LOCAL ? `<p class="sim" data-id="${r[0]}"><button class="simbtn">Show similar papers</button></p>` : "");
 }
 const starsHTML = (id) => !LOCAL ? (ratings[id] ? "Your rating: " + "★".repeat(ratings[id]) : "") : "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
   `<button class="star${(ratings[id] || 0) >= n ? " on" : ""}" data-n="${n}" title="${n} (key ${n})">★</button>`).join("");
@@ -157,6 +159,13 @@ function rate(id, n) {
     el.querySelector(".rb").textContent = ratings[id] ? "★" + ratings[id] : "";
     const st = el.querySelector(".stars"); if (st) st.innerHTML = starsHTML(id);
   });
+}
+function showSimilar(p) {
+  p.textContent = "…";
+  fetch("api/similar?id=" + encodeURIComponent(p.dataset.id)).then((r) => r.json()).then((l) => {
+    p.innerHTML = l.length ? "<b>Similar</b><ul>" + l.map((x) => `<li><a href="#/?q=${encodeURIComponent("id:" + x.id)}">${esc(x.title || x.id)}</a> <span class="mute">${(x.date || "").slice(5)} · ${x.sim.toFixed(2)}</span></li>`).join("") + "</ul>"
+      : "No vectors yet (run: python run.py --embed-backfill)";
+  }).catch(() => { p.textContent = "unavailable"; });
 }
 function like(id) {
   if (!LOCAL) return;
@@ -239,6 +248,8 @@ $("#dens").addEventListener("click", (e) => {
 $("#help").onclick = () => $("#helpbox").showModal();
 $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const sb = e.target.closest(".simbtn");
+  if (sb) return showSimilar(sb.parentElement);
   const lk = e.target.closest(".lk");
   if (lk) return like(rows[+lk.closest(".r").dataset.i][0]);
   const bm = e.target.closest(".bm");
@@ -282,7 +293,11 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.leng
 // ── boot ───────────────────────────────────────────────────────────────
 setDensity(store.get("dens", "compact"));
 fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
-  if (st && st.ratings) { LOCAL = true; ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local"; return; }
+  if (st && st.ratings) { LOCAL = true;
+    fetch("api/taste").then((r) => r.json()).then((t) => {
+      taste = t;
+      if (Object.keys(t).length) { $("#sort").insertAdjacentHTML("beforeend", '<option value="taste">for you ♥</option>'); if (DATA) view(); }
+    }).catch(() => {}); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local"; return; }
   document.body.classList.add("ro");  // public site: read-only mirror of the local picks
   return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); liked = new Set(pf.likes || []); } });

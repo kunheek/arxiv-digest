@@ -498,3 +498,34 @@ def test_likes_protected_and_used_as_examples(tmp_path):
     assert con.execute("SELECT COUNT(*) FROM papers WHERE id='2610.00001'").fetchone()[0] == 1
     db.set_like(con, "2610.00001", False)
     assert db.likes(con) == []
+
+
+def test_embeddings_taste_and_similar(tmp_path, monkeypatch):
+    import numpy as np
+    from digest import db, embed
+    con = db.connect(str(tmp_path / "d.db"))
+    papers = [_paper(f"2610.{i:05d}") for i in range(12)]
+    db.upsert(con, papers, "2026-10-01", {"total": 12, "cost": 0, "calls": 0})
+    # two topics: even ids ≈ axis 0, odd ids ≈ axis 1
+    def fake(texts):
+        out = []
+        for t in texts:
+            k = int(t.split("#")[1][:4]) if "#" in t else 0
+            v = np.array([1.0, 0.05 * k] if k % 2 == 0 else [0.05 * k, 1.0], np.float32)
+            out.append(v / np.linalg.norm(v))
+        return np.pad(np.array(out), ((0, 0), (0, 382)))
+    monkeypatch.setattr(embed, "encode", fake)
+    for p in papers:
+        con.execute("UPDATE papers SET title=? WHERE id=?", (f"x #{int(p.id[5:]):04d}", p.id))
+    assert embed.embed_missing(con) == 12 and embed.embed_missing(con) == 0
+    assert embed.taste_scores(con) == {}                       # no picks yet
+    for i in (0, 2, 4, 6):
+        db.set_like(con, f"2610.{i:05d}", True)
+    ts = embed.taste_scores(con)
+    even = [v for k, v in ts.items() if int(k[5:]) % 2 == 0]
+    odd = [v for k, v in ts.items() if int(k[5:]) % 2 == 1]
+    assert min(even) > max(odd)                                # liked topic ranks above the other
+    sim = embed.similar(con, "2610.00000")
+    assert all(int(i[5:]) % 2 == 0 for i, _ in sim[:5])
+    db.prune(con, 3)
+    assert con.execute("SELECT COUNT(*) FROM vectors").fetchone()[0] == con.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
