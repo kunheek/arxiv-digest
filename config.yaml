@@ -21,8 +21,8 @@ interest_profile: |
   - New architectures, such as linear and sparse attention
   Secondary interests (for inspiration and context):
   - Probabilistic generative models, including diffusion and score-based models
-  - Optimization for deep learning (e.g., MUON)
   - Bayesian methods, including MCMC and variational inference
+  - Mathematical/physics perspective of understanding deep learning optimization, attention, etc
 
 # Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
 seed_papers:

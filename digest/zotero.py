@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 import html
 import os
+import re
 import threading
 import time
 import uuid
@@ -146,11 +147,18 @@ def note_html(p: dict) -> str:
     return "".join(parts)
 
 
-def _find_existing(pid: str) -> dict | None:
-    """An item you already have for this arXiv id (e.g. saved with the Zotero connector).
-    Best effort: if the search fails we just create a new item."""
+def _norm(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", title.lower()).strip()
+
+
+def _find_existing(pid: str, title: str) -> dict | None:
+    """An item you already have for this paper (e.g. saved with the Zotero connector).
+    Zotero's quick search doesn't index URL / archiveID / DOI, so search by title and confirm by
+    arXiv id or exact title. Best effort: if the search fails we just create a new item."""
+    words = _norm(title).split()
     try:
-        found = _req("GET", f"/users/{user_id()}/items/top", params={"q": pid, "qmode": "everything", "limit": 25}).json()
+        found = _req("GET", f"/users/{user_id()}/items/top",
+                     params={"q": " ".join(words[:8]), "qmode": "titleCreatorYear", "limit": 50}).json()
     except RuntimeError:
         raise  # bad key: let the caller report it
     except Exception as e:  # noqa: BLE001
@@ -159,6 +167,9 @@ def _find_existing(pid: str) -> dict | None:
     for it in found:
         d = it["data"]
         if pid in " ".join(str(d.get(f, "")) for f in ("url", "archiveID", "extra", "DOI")):
+            return it
+    for it in found:  # e.g. the published version, saved without the arXiv id
+        if _norm(it["data"].get("title", "")) == _norm(title):
             return it
     return None
 
@@ -173,7 +184,7 @@ def push(con, pid: str, cfg: dict) -> str:
         if not p:
             raise RuntimeError(f"{pid} is not in the database")
         coll = collection_key(con, zc.get("collection", "arxiv-digest"))
-        existing = _find_existing(pid)
+        existing = _find_existing(pid, p["title"])
         if existing:  # file your copy into the collection rather than making a duplicate
             key, d = existing["key"], existing["data"]
             if coll not in d.get("collections", []):

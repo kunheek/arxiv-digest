@@ -115,6 +115,27 @@ class FakeClient:
         )
 
 
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _no_real_zotero(monkeypatch, tmp_path):
+    """Never let a test reach your real Zotero library: no key from the shell or .env, unless a
+    test sets one itself (and patches `requests`)."""
+    from digest import zotero
+    monkeypatch.delenv("ZOTERO_API_KEY", raising=False)
+    monkeypatch.delenv("ZOTERO_USER_ID", raising=False)
+    monkeypatch.setattr(zotero, "ENV_FILE", str(tmp_path / "no.env"))
+    monkeypatch.setattr(zotero, "_user", None)
+
+    def no_network(*a, **kw):
+        raise AssertionError("a test tried to call the real Zotero API")
+    monkeypatch.setattr(zotero.requests, "request", no_network)
+    real_load_env = run.load_env
+    # run.main() loads the real .env; drop Zotero keys from it so background pushes stay off
+    monkeypatch.setattr(run, "load_env", lambda path: (real_load_env(path), os.environ.pop("ZOTERO_API_KEY", None)))
+
+
 def test_parse_rss():
     ps = parse_rss(make_rss())
     assert [p.id for p in ps] == [
@@ -559,8 +580,11 @@ class FakeZotero:
             self.collections.append(("COLL0001", json[0]["name"]))
             r.json = lambda: {"successful": {"0": {"key": "COLL0001"}}, "failed": {}}
         elif path.endswith("/items/top"):
-            q = params["q"]
-            r.json = lambda: [{"key": k, "version": 3, "data": d} for k, d in self.items.items() if q in d.get("url", "")]
+            # like the real API: quick search matches titles (and creators/year), never URL or ids
+            assert params["qmode"] == "titleCreatorYear"
+            q = params["q"].lower()
+            r.json = lambda: [{"key": k, "version": 3, "data": d} for k, d in self.items.items()
+                              if d.get("title") and all(w in d["title"].lower() for w in q.split())]
         elif path.endswith("/items") and method == "POST":
             keys = {}
             for n, it in enumerate(json):
@@ -580,7 +604,8 @@ def test_zotero_push_adds_once_and_links_existing(tmp_path, monkeypatch):
     monkeypatch.setenv("ZOTERO_API_KEY", "k")
     monkeypatch.setenv("ZOTERO_USER_ID", "42")
     monkeypatch.setattr(zotero, "_user", None)
-    fake = FakeZotero({"MINE0001": {"itemType": "preprint", "url": "https://arxiv.org/abs/2610.00002", "collections": []}})
+    fake = FakeZotero({"MINE0001": {"itemType": "preprint", "title": "Title 2610.00002",
+                                    "url": "http://arxiv.org/abs/2610.00002", "collections": []}})
     monkeypatch.setattr(zotero.requests, "request", fake)
     con = db.connect(str(tmp_path / "d.db"))
     db.upsert(con, [_paper("2610.00001", tags=["3D"], tldr="short"), _paper("2610.00002")], "2026-10-01",
