@@ -664,3 +664,24 @@ def test_taste_never_scores_a_reference_paper_against_itself(tmp_path):
     # with only itself as a negative, leaving it out means no negative penalty at all
     assert abs(raw - embed.taste_raw(ix.rows([ids[3]]), ix.rows(ids[:3]), ix.rows([]))[0]) < 1e-6
     assert set(embed.taste_scores(con, ix)) == set(ids)
+
+
+def test_zotero_child_failure_does_not_duplicate(tmp_path, monkeypatch):
+    from digest import db, zotero
+    monkeypatch.setenv("ZOTERO_API_KEY", "k")
+    monkeypatch.setenv("ZOTERO_USER_ID", "42")
+    fake = FakeZotero()
+
+    def flaky(method, url, **kw):
+        if method == "POST" and url.endswith("/items") and kw["json"][0].get("parentItem"):
+            raise zotero.requests.ConnectionError("network blip")         # note/PDF link fails
+        return fake(method, url, **kw)
+    monkeypatch.setattr(zotero.requests, "request", flaky)
+    con = db.connect(str(tmp_path / "d.db"))
+    db.upsert(con, [_paper("2410.00001")], "2026-10-01", {"total": 1, "cost": 0, "calls": 0})
+    db.set_like(con, "2410.00001", True)
+    cfg = {"zotero": {}}
+    assert zotero.sync(con, cfg) == "1 added"
+    assert zotero.sync(con, cfg) == "nothing to push"                     # mapped: no second item
+    items = [d for d in fake.items.values() if d.get("itemType") == "preprint"]
+    assert len(items) == 1 and items[0]["date"] == "2024"                 # submission year, not digest date

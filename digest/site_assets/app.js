@@ -194,10 +194,13 @@ async function copyBib(btn) {
 }
 function showSimilar(p) {
   p.textContent = "…";
-  fetch("api/similar?id=" + encodeURIComponent(p.dataset.id)).then((r) => r.json()).then((l) => {
+  fetch("api/similar?id=" + encodeURIComponent(p.dataset.id)).then((r) => r.json().then((l) => {
+    if (!r.ok) throw new Error(l.error || r.status);
+    return l;
+  })).then((l) => {
     p.innerHTML = l.length ? "<b>Similar</b><ul>" + l.map((x) => `<li><a href="#/?q=${encodeURIComponent("id:" + x.id)}">${esc(x.title || x.id)}</a> <span class="mute">${(x.date || "").slice(5)} · ${x.sim.toFixed(2)}</span></li>`).join("") + "</ul>"
       : "No vectors yet (run: python run.py --embed-backfill)";
-  }).catch(() => { p.textContent = "unavailable"; });
+  }).catch((e) => { p.textContent = "Similar papers unavailable: " + e.message; });
 }
 function like(id) {
   if (!LOCAL) return;

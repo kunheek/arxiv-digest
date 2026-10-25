@@ -20,6 +20,7 @@ import uuid
 import requests
 
 from . import db
+from .bibtex import year
 from .env import load_env
 from .site import clean_name
 
@@ -118,7 +119,7 @@ def item_json(p: dict, collection: str, tag: str) -> dict:
         "abstractNote": p["abstract"] or "",
         "repository": "arXiv",
         "archiveID": f"arXiv:{pid}",
-        "date": p["date"],
+        "date": year(pid, p["date"]),  # submission year, as in the BibTeX (not the digest date)
         "DOI": f"10.48550/arXiv.{pid}",
         "url": f"https://arxiv.org/abs/{pid}",
         "libraryCatalog": "arXiv.org",
@@ -146,8 +147,15 @@ def note_html(p: dict) -> str:
 
 
 def _find_existing(pid: str) -> dict | None:
-    """An item you already have for this arXiv id (e.g. saved with the Zotero connector)."""
-    found = _req("GET", f"/users/{user_id()}/items/top", params={"q": pid, "qmode": "everything", "limit": 25}).json()
+    """An item you already have for this arXiv id (e.g. saved with the Zotero connector).
+    Best effort: if the search fails we just create a new item."""
+    try:
+        found = _req("GET", f"/users/{user_id()}/items/top", params={"q": pid, "qmode": "everything", "limit": 25}).json()
+    except RuntimeError:
+        raise  # bad key: let the caller report it
+    except Exception as e:  # noqa: BLE001
+        print(f"zotero: library search failed for {pid} ({e}); creating a new item")
+        return None
     for it in found:
         d = it["data"]
         if pid in " ".join(str(d.get(f, "")) for f in ("url", "archiveID", "extra", "DOI")):
@@ -175,6 +183,7 @@ def push(con, pid: str, cfg: dict) -> str:
             status = "linked"
         else:
             key = _post_items([item_json(p, coll, zc.get("tag", "arxiv-digest"))])[0]
+            _remember(con, pid, key)  # before the children, so a failure below can't cause a duplicate
             children = []
             if zc.get("note", True):
                 children.append({"itemType": "note", "parentItem": key, "note": note_html(p), "tags": [], "relations": {}})
@@ -183,11 +192,18 @@ def push(con, pid: str, cfg: dict) -> str:
                                  "title": "arXiv PDF", "url": f"https://arxiv.org/pdf/{pid}",
                                  "contentType": "application/pdf", "tags": [], "relations": {}})
             if children:
-                _post_items(children)
-            status = "added"
-        with con:
-            con.execute("INSERT OR REPLACE INTO zotero VALUES (?,?,?)", (pid, key, dt.date.today().isoformat()))
+                try:
+                    _post_items(children)
+                except Exception as e:  # noqa: BLE001  the item itself is in; note/link are extras
+                    print(f"zotero: added {pid} but not its note/PDF link ({e})")
+            return "added"
+        _remember(con, pid, key)
         return status
+
+
+def _remember(con, pid: str, key: str) -> None:
+    with con:
+        con.execute("INSERT OR REPLACE INTO zotero VALUES (?,?,?)", (pid, key, dt.date.today().isoformat()))
 
 
 def pending(con) -> list[str]:
