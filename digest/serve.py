@@ -43,8 +43,27 @@ def _brief(con, pid: str) -> dict:
     return {"title": r["title"], "date": r["date"]} if r else {}
 
 
-def make_handler(db_path: str, title: str):
+def _push_to_zotero(db_path: str, pid: str, cfg: dict) -> None:
+    """Runs in a background thread after a like/bookmark; failures are retried by --zotero-sync."""
+    try:
+        from . import zotero
+
+        if not zotero.configured():
+            return
+        con = db.connect(db_path)
+        try:
+            zotero.push(con, pid, cfg)
+        finally:
+            con.close()
+    except Exception as e:  # noqa: BLE001
+        print(f"zotero push failed for {pid}: {e}  (retry: python run.py --zotero-sync)")
+
+
+def make_handler(db_path: str, title: str, cfg: dict | None = None):
+    cfg = cfg or {}
+    min_rating = cfg.get("feedback", {}).get("min_rating", 4)
     cache = _Cache(db_path)
+    vectors = None  # embed.Cache, created on first use (numpy/fastembed import is lazy)
     page = site.page_html(title, local=True).encode()
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -65,6 +84,7 @@ def make_handler(db_path: str, title: str):
             self._send(json.dumps(obj).encode(), "application/json", code=code)
 
         def do_GET(self):
+            nonlocal vectors
             path = self.path.split("?")[0]
             if path in ("/", "/index.html"):
                 return self._send(page, "text/html; charset=utf-8")
@@ -93,16 +113,23 @@ def make_handler(db_path: str, title: str):
                 from urllib.parse import parse_qs, urlparse
 
                 q = parse_qs(urlparse(self.path).query)
-                con = db.connect(db_path)
                 try:
                     from . import embed
 
-                    if path == "/api/taste":
-                        return self._json(embed.taste_scores(con))
-                    pid = q.get("id", [""])[0]
-                    return self._json([{"id": i, "sim": s, **(_brief(con, i))} for i, s in embed.similar(con, pid)])
-                finally:
-                    con.close()
+                    vectors = vectors or embed.Cache(db_path)
+                    con = db.connect(db_path)
+                    try:
+                        ix = vectors.get(con)
+                        if path == "/api/taste":
+                            return self._json(embed.taste_scores(con, ix, min_rating=min_rating))
+                        pid = q.get("id", [""])[0]
+                        return self._json(
+                            [{"id": i, "sim": s, **_brief(con, i)} for i, s in embed.similar(con, pid, index=ix)]
+                        )
+                    finally:
+                        con.close()
+                except Exception as e:  # noqa: BLE001  (missing numpy, locked DB, ...)
+                    return self._json({"error": f"{type(e).__name__}: {e}"}, 500)
             name = os.path.basename(path)
             f = os.path.join(site.ASSETS, name)
             if name and os.path.isfile(f) and name != "index.html":
@@ -122,10 +149,13 @@ def make_handler(db_path: str, title: str):
                 try:
                     if self.path == "/api/rating":
                         db.set_rating(con, pid, int(body.get("rating", 0)))
-                    elif self.path == "/api/like":
-                        db.set_like(con, pid, bool(body.get("on")))
-                    elif self.path == "/api/bookmark":
-                        db.set_bookmark(con, pid, bool(body.get("on")))
+                    elif self.path in ("/api/like", "/api/bookmark"):
+                        on = bool(body.get("on"))
+                        (db.set_like if self.path == "/api/like" else db.set_bookmark)(con, pid, on)
+                        if on:  # un-liking never deletes from Zotero (you may have annotated it)
+                            threading.Thread(
+                                target=_push_to_zotero, args=(db_path, pid, cfg), daemon=True
+                            ).start()
                     else:
                         return self._json({"error": "unknown endpoint"}, 404)
                 finally:
@@ -137,9 +167,11 @@ def make_handler(db_path: str, title: str):
     return Handler
 
 
-def serve(db_path: str, host: str = "127.0.0.1", port: int = 8000, title: str = "arXiv digest") -> None:
+def serve(
+    db_path: str, host: str = "127.0.0.1", port: int = 8000, title: str = "arXiv digest", cfg: dict | None = None
+) -> None:
     db.connect(db_path).close()  # make sure the schema exists
-    httpd = http.server.ThreadingHTTPServer((host, port), make_handler(db_path, title))
+    httpd = http.server.ThreadingHTTPServer((host, port), make_handler(db_path, title, cfg))
     print(f"serving all papers from {db_path} at http://{host}:{port}/  (Ctrl-C to stop)")
     try:
         httpd.serve_forever()

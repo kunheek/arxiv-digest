@@ -105,6 +105,28 @@ float16 in the `vectors` table, never published). The local site uses them for:
 
 The taste score is not mixed into the daily ranking: Sonnet still decides what gets summarized.
 
+### Zotero
+Papers you **like** or **bookmark** on the local site are pushed to your Zotero library: a
+`preprint` item in the `arxiv-digest` collection, with your digest tags, a child note (TL;DR,
+why-you, scores) and a link to the arXiv PDF (no Zotero storage used). Ratings are not pushed.
+A paper already in your library is filed into the collection instead of duplicated, and
+un-liking never deletes anything from Zotero.
+
+1. Create a key with **write access** at https://www.zotero.org/settings/keys and add
+   `ZOTERO_API_KEY=...` to `.env` (`ZOTERO_USER_ID` is optional; it's looked up from the key).
+2. `.venv/bin/python run.py --zotero-sync` checks the key and pushes everything you've already
+   liked or bookmarked.
+
+From then on each like/bookmark is pushed in the background (the running server picks up the key
+from `.env` without a restart), and the daily run retries anything that failed.
+Settings: `zotero:` in `config.yaml`.
+
+### BibTeX
+**Copy BibTeX** in an expanded row (both sites) gives the same `@misc` entry as
+`arxiv.org/bibtex/<id>`, built locally. `.venv/bin/python run.py --export-bib refs.bib` writes
+all liked/bookmarked papers. For a `.bib` that stays in sync with your library, use Zotero's
+Better BibTeX plugin on the `arxiv-digest` collection.
+
 ## Tuning (`config.yaml`)
 - **`interest_profile`** matters most. Be specific about what's core, adjacent and unwanted.
 - **`seed_papers`** are titles that are "exactly my taste".

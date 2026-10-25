@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS likes (
 CREATE TABLE IF NOT EXISTS vectors (
   id TEXT PRIMARY KEY, vec BLOB NOT NULL
 );
+CREATE TABLE IF NOT EXISTS zotero (
+  id TEXT PRIMARY KEY, item_key TEXT NOT NULL, pushed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS meta (
+  k TEXT PRIMARY KEY, v TEXT
+);
 CREATE TABLE IF NOT EXISTS days (
   date TEXT PRIMARY KEY, total INTEGER, cost REAL, calls INTEGER
 );
@@ -100,6 +106,16 @@ def all_papers(con: sqlite3.Connection, date: str | None = None) -> list[dict]:
             d[c] = json.loads(d[c] or "[]")
         out.append(d)
     return out
+
+
+def get_paper(con: sqlite3.Connection, pid: str) -> dict | None:
+    r = con.execute("SELECT * FROM papers WHERE id = ?", (pid,)).fetchone()
+    if not r:
+        return None
+    d = dict(r)
+    for c in JSON_COLS:
+        d[c] = json.loads(d[c] or "[]")
+    return d
 
 
 def load_day(con: sqlite3.Connection, date: str) -> list[Paper]:

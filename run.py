@@ -10,6 +10,8 @@ Free modes (no arXiv, no Claude):
   python run.py --import-ratings FILE        # load ratings.json exported from the website
   python run.py --embed-backfill             # embed every paper in the DB (local, CPU)
   python run.py --eval-taste                 # does the embedding taste score beat Sonnet's?
+  python run.py --zotero-sync                # push liked/bookmarked papers to Zotero (checks the key)
+  python run.py --export-bib refs.bib        # BibTeX for liked/bookmarked papers
 """
 
 from __future__ import annotations
@@ -90,6 +92,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     )
     ap.add_argument("--embed-backfill", action="store_true", help="embed all papers lacking a vector")
     ap.add_argument("--eval-taste", action="store_true", help="compare Sonnet's score with the embedding taste score")
+    ap.add_argument("--zotero-sync", action="store_true", help="push liked/bookmarked papers to Zotero")
+    ap.add_argument("--export-bib", metavar="FILE", help="write BibTeX for liked/bookmarked papers")
     args = ap.parse_args(argv)
 
     load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
@@ -100,7 +104,7 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     if args.serve:
         from digest import serve
 
-        serve.serve(args.db, args.host, args.port, cfg["delivery"].get("site_title", "arXiv digest"))
+        serve.serve(args.db, args.host, args.port, cfg["delivery"].get("site_title", "arXiv digest"), cfg)
         return 0
     if args.embed_backfill or args.eval_taste:
         from digest import embed
@@ -109,7 +113,32 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         if args.embed_backfill:
             print(f"embedded {embed.embed_missing(con)} papers")
         if args.eval_taste:
-            print(embed.evaluate(con))
+            print(embed.evaluate(con, min_rating=cfg.get("feedback", {}).get("min_rating", 4)))
+        return 0
+    if args.zotero_sync:
+        from digest import zotero
+
+        if not zotero.configured():
+            print("ZOTERO_API_KEY is not set. Create a key with write access at "
+                  "https://www.zotero.org/settings/keys and put it in .env (see .env.example).")
+            return 1
+        me = zotero.whoami()
+        if not me.get("access", {}).get("user", {}).get("write"):
+            print(f"The key for {me.get('username')} has no write access to your library; edit it on zotero.org.")
+            return 1
+        con = db.connect(args.db)
+        print(f"Zotero user {me.get('username')} ({me.get('userID')}): {len(zotero.pending(con))} papers to push")
+        print(zotero.sync(con, cfg))
+        return 0
+    if args.export_bib:
+        from digest import bibtex
+
+        con = db.connect(args.db)
+        ids = [r[0] for r in con.execute("SELECT id FROM likes UNION SELECT id FROM bookmarks ORDER BY 1")]
+        papers = [p for p in (db.get_paper(con, i) for i in ids) if p]
+        with open(args.export_bib, "w") as f:
+            f.write("\n".join(bibtex.entry(p) for p in papers))
+        print(f"wrote {len(papers)} entries to {args.export_bib}")
         return 0
     if args.import_ratings or args.site_only:
         con = db.connect(args.db)
@@ -222,12 +251,6 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             today,
             stats,
         )
-        try:  # vectors power "similar papers"/taste on the local site; never fail the run over them
-            from digest import embed
-
-            embed.embed_missing(con)
-        except Exception as e:  # noqa: BLE001
-            print(f"    (embedding skipped: {e})")
         pruned = db.prune(con, cfg["limits"].get("db_max_papers", 0))
         if pruned:
             print(f"    pruned {pruned} oldest papers from the database (db_max_papers)")
@@ -248,7 +271,25 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             print("    posted to Discord")
         seen.update({p.id: today for p in papers})
         state.save(args.state, seen, today)
+        after_delivery(con, cfg, today)
     return 0
+
+
+def after_delivery(con, cfg: dict, today: str) -> None:
+    """Local extras once the digest is out; a failure here never fails the run."""
+    try:  # vectors power "similar papers"/taste on the local site
+        from digest import embed
+
+        print(f"    embedded {embed.embed_missing(con, date=today)} papers")
+    except Exception as e:  # noqa: BLE001
+        print(f"    (embedding skipped: {e})")
+    try:  # retry anything a click on the local site failed to push
+        from digest import zotero
+
+        if zotero.configured():
+            print(f"    zotero: {zotero.sync(con, cfg)}")
+    except Exception as e:  # noqa: BLE001
+        print(f"    (zotero sync skipped: {e})")
 
 
 if __name__ == "__main__":

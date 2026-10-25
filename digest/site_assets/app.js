@@ -10,7 +10,20 @@ let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 // the database. The public GitHub Pages site is read-only: it shows the same picks, published
 // from the database as data/prefs.json.
 let ratings = {}, saved = new Set(), liked = new Set(), taste = {}, LOCAL = false;
-const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
+const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+  .then(() => { clearTimeout(post.t); post.t = setTimeout(() => refreshTaste(false), 800); }).catch(() => {});  // picks changed → new taste
+// Taste scores (local only): "for you ♥" sort + ♥ badges, re-fetched whenever your picks change.
+// After a pick we only update the numbers (shown on the next render) so the list doesn't jump.
+function refreshTaste(rerender = true) {
+  fetch("api/taste").then((r) => (r.ok ? r.json() : {})).then((t) => {
+    taste = t;
+    const has = Object.keys(t).length > 0, opt = $("#sort").querySelector('option[value="taste"]');
+    if (has && !opt) $("#sort").insertAdjacentHTML("beforeend", '<option value="taste">for you ♥</option>');
+    if (!has && opt) opt.remove();
+    if (readState().sort === "taste") $("#sort").value = has ? "taste" : "score";
+    if (DATA && rerender) view();
+  }).catch(() => {});
+}
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
@@ -146,7 +159,8 @@ async function fillDet(el) {
     (badges ? `<p>${badges}</p>` : "") +
     `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)} · Impact ${(r[11] ?? 0).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
     (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>` +
-    (LOCAL ? `<p class="sim" data-id="${r[0]}"><button class="simbtn">Show similar papers</button></p>` : "");
+    `<p class="acts"><button class="act bibbtn">Copy BibTeX</button>` +
+    (LOCAL ? ` <button class="act simbtn">Show similar papers</button>` : "") + `</p><div class="sim" data-id="${r[0]}"></div>`;
 }
 const starsHTML = (id) => !LOCAL ? (ratings[id] ? "Your rating: " + "★".repeat(ratings[id]) : "") : "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
   `<button class="star${(ratings[id] || 0) >= n ? " on" : ""}" data-n="${n}" title="${n} (key ${n})">★</button>`).join("");
@@ -159,6 +173,24 @@ function rate(id, n) {
     el.querySelector(".rb").textContent = ratings[id] ? "★" + ratings[id] : "";
     const st = el.querySelector(".stars"); if (st) st.innerHTML = starsHTML(id);
   });
+}
+// Same @misc entry as digest/bibtex.py (and arxiv.org/bibtex/<id>).
+const STOP = new Set("a an the on of for in to and with towards toward via is".split(" "));
+const ascii = (s) => s.normalize("NFKD").replace(/[^\x00-\x7f]/g, "");
+function bibtex(r, d) {
+  const [id, date, title] = r, au = d.au || r[5], cats = d.cat || r[8];
+  const year = /^\d{4}\./.test(id) ? "20" + id.slice(0, 2) : date.slice(0, 4);
+  const last = au.length ? ascii(au[0].split(/\s+/).pop()).toLowerCase().replace(/[^a-z]/g, "") : "anon";
+  const word = (ascii(title).toLowerCase().match(/[a-z0-9]+/g) || []).find((w) => !STOP.has(w)) || "";
+  return `@misc{${last}${year}${word},\n      title={${title.split(/\s+/).join(" ").replace(/(?<!\\)&/g, "\\&")}},\n` +
+    `      author={${au.join(" and ")}},\n      year={${year}},\n      eprint={${id}},\n      archivePrefix={arXiv},\n` +
+    (cats[0] ? `      primaryClass={${cats[0]}},\n` : "") + `      url={https://arxiv.org/abs/${id}},\n}\n`;
+}
+async function copyBib(btn) {
+  const r = rows[+btn.closest(".r").dataset.i], d = (await shard(r[1]))[r[0]] || {}, text = bibtex(r, d);
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied ✓"; }
+  catch { prompt("BibTeX (clipboard needs https or localhost):", text); }  // e.g. served over plain http on the LAN
+  setTimeout(() => { btn.textContent = "Copy BibTeX"; }, 1500);
 }
 function showSimilar(p) {
   p.textContent = "…";
@@ -248,8 +280,10 @@ $("#dens").addEventListener("click", (e) => {
 $("#help").onclick = () => $("#helpbox").showModal();
 $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
+  const bb = e.target.closest(".bibbtn");
+  if (bb) return copyBib(bb);
   const sb = e.target.closest(".simbtn");
-  if (sb) return showSimilar(sb.parentElement);
+  if (sb) { const box = sb.closest(".det").querySelector(".sim"); sb.remove(); return showSimilar(box); }
   const lk = e.target.closest(".lk");
   if (lk) return like(rows[+lk.closest(".r").dataset.i][0]);
   const bm = e.target.closest(".bm");
@@ -294,10 +328,7 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.leng
 setDensity(store.get("dens", "compact"));
 fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
   if (st && st.ratings) { LOCAL = true;
-    fetch("api/taste").then((r) => r.json()).then((t) => {
-      taste = t;
-      if (Object.keys(t).length) { $("#sort").insertAdjacentHTML("beforeend", '<option value="taste">for you ♥</option>'); if (DATA) view(); }
-    }).catch(() => {}); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local"; return; }
+    refreshTaste(); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local"; return; }
   document.body.classList.add("ro");  // public site: read-only mirror of the local picks
   return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); liked = new Set(pf.likes || []); } });

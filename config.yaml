@@ -87,6 +87,13 @@ feedback:
   min_rating: 4
   max_examples: 30
 
+zotero:
+  # Liked and bookmarked papers are pushed to your Zotero library (needs ZOTERO_API_KEY in .env).
+  collection: arxiv-digest   # created if missing
+  tag: arxiv-digest
+  note: true                 # child note with the TL;DR, why-you and scores
+  pdf_link: true             # linked-URL attachment to the arXiv PDF (uses no Zotero storage)
+
 delivery:
   discord: true              # one "digest updated" message with a link to the site
   site: true                 # keep data/digest.db and build the website in site/

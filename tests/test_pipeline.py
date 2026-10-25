@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import sqlite3
 import sys
 import types
 
@@ -155,6 +156,11 @@ def test_end_to_end(tmp_path, monkeypatch):
 
     monkeypatch.setattr(enrich_mod, "fetch_html", fake_html)
     monkeypatch.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import numpy as np
+    from digest import embed, zotero
+    # no model download / network in tests: fake vectors, and Zotero treated as not configured
+    monkeypatch.setattr(embed, "encode", lambda texts: np.eye(len(texts), 384, dtype=np.float32))
+    monkeypatch.setattr(zotero, "configured", lambda: False)
 
     def fetcher(cats, types_):
         return [p for p in parse_rss(make_rss()) if p.announce_type in types_]
@@ -196,6 +202,9 @@ def test_end_to_end(tmp_path, monkeypatch):
     assert "claude-haiku-5-5" in client.calls and "claude-sonnet-5-5" in client.calls
     seen = json.loads(state.read_text())
     assert set(seen) == {"2610.00001", "2610.00002", "2610.00003"}
+    con = sqlite3.connect(str(tmp_path / "digest.db"))
+    assert con.execute("SELECT COUNT(*) FROM vectors").fetchone()[0] == \
+        con.execute("SELECT COUNT(*) FROM papers").fetchone()[0]          # today's papers embedded
 
     # second run same day: nothing new, no Claude calls
     n = len(client.calls)
@@ -529,3 +538,129 @@ def test_embeddings_taste_and_similar(tmp_path, monkeypatch):
     assert all(int(i[5:]) % 2 == 0 for i, _ in sim[:5])
     db.prune(con, 3)
     assert con.execute("SELECT COUNT(*) FROM vectors").fetchone()[0] == con.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+
+
+class FakeZotero:
+    """Just enough of api.zotero.org for zotero.py: collections, item search, item writes."""
+
+    def __init__(self, library=None):
+        self.collections, self.items, self.calls = [], dict(library or {}), []
+
+    def __call__(self, method, url, headers=None, timeout=None, params=None, json=None):
+        path = url.split("api.zotero.org")[1]
+        self.calls.append((method, path, json))
+        assert headers["Zotero-API-Key"] == "k" and headers["Zotero-API-Version"] == "3"
+        if method == "POST":
+            assert headers.get("Zotero-Write-Token")
+        r = types.SimpleNamespace(status_code=200, headers={}, raise_for_status=lambda: None)
+        if path.endswith("/collections") and method == "GET":
+            r.json = lambda: [{"key": k, "data": {"name": n}} for k, n in self.collections]
+        elif path.endswith("/collections"):
+            self.collections.append(("COLL0001", json[0]["name"]))
+            r.json = lambda: {"successful": {"0": {"key": "COLL0001"}}, "failed": {}}
+        elif path.endswith("/items/top"):
+            q = params["q"]
+            r.json = lambda: [{"key": k, "version": 3, "data": d} for k, d in self.items.items() if q in d.get("url", "")]
+        elif path.endswith("/items") and method == "POST":
+            keys = {}
+            for n, it in enumerate(json):
+                k = f"ITEM{len(self.items):04d}"
+                self.items[k] = it
+                keys[str(n)] = {"key": k}
+            r.json = lambda: {"successful": keys, "failed": {}}
+        elif method == "PATCH":
+            assert headers["If-Unmodified-Since-Version"] == "3"
+            self.items[path.rsplit("/", 1)[1]].update(json)
+            r.json = lambda: {}
+        return r
+
+
+def test_zotero_push_adds_once_and_links_existing(tmp_path, monkeypatch):
+    from digest import db, zotero
+    monkeypatch.setenv("ZOTERO_API_KEY", "k")
+    monkeypatch.setenv("ZOTERO_USER_ID", "42")
+    monkeypatch.setattr(zotero, "_user", None)
+    fake = FakeZotero({"MINE0001": {"itemType": "preprint", "url": "https://arxiv.org/abs/2610.00002", "collections": []}})
+    monkeypatch.setattr(zotero.requests, "request", fake)
+    con = db.connect(str(tmp_path / "d.db"))
+    db.upsert(con, [_paper("2610.00001", tags=["3D"], tldr="short"), _paper("2610.00002")], "2026-10-01",
+              {"total": 2, "cost": 0, "calls": 0})
+    db.set_like(con, "2610.00001", True)
+    db.set_bookmark(con, "2610.00002", True)
+    assert zotero.pending(con) == ["2610.00001", "2610.00002"]
+    cfg = {"zotero": {"collection": "arxiv-digest", "tag": "arxiv-digest"}}
+    assert zotero.sync(con, cfg) == "1 added, 1 linked"
+    item = next(d for d in fake.items.values() if d.get("archiveID") == "arXiv:2610.00001")
+    assert item["itemType"] == "preprint" and item["collections"] == ["COLL0001"]
+    assert {"tag": "3D"} in item["tags"] and item["creators"][0] == {"creatorType": "author", "firstName": "A", "lastName": "B"}
+    kids = [d for d in fake.items.values() if d.get("parentItem")]
+    assert {k["itemType"] for k in kids} == {"note", "attachment"} and "short" in next(k["note"] for k in kids if k["itemType"] == "note")
+    assert fake.items["MINE0001"]["collections"] == ["COLL0001"]           # your copy filed, not duplicated
+    n = len(fake.calls)
+    assert zotero.sync(con, cfg) == "nothing to push" and zotero.push(con, "2610.00001", cfg) == "already"
+    assert len(fake.calls) == n                                              # no API calls once synced
+
+
+def test_zotero_not_configured_is_a_noop(tmp_path, monkeypatch):
+    from digest import zotero
+    monkeypatch.delenv("ZOTERO_API_KEY", raising=False)
+    monkeypatch.setattr(zotero, "ENV_FILE", str(tmp_path / "missing.env"))
+    assert not zotero.configured()
+    (tmp_path / "late.env").write_text("ZOTERO_API_KEY=added-later\n")   # key added while the server runs
+    monkeypatch.setattr(zotero, "ENV_FILE", str(tmp_path / "late.env"))
+    assert zotero.configured()
+
+
+def test_like_on_local_server_pushes_to_zotero(tmp_path, monkeypatch):
+    import http.server, threading, urllib.request
+    from digest import db, serve, zotero
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    db.upsert(con, [_paper("2610.00001")], "2026-10-01", {"total": 1, "cost": 0, "calls": 0})
+    con.close()
+    pushed = threading.Event()
+    monkeypatch.setattr(zotero, "configured", lambda: True)
+    monkeypatch.setattr(zotero, "push", lambda con, pid, cfg: pushed.set() or "added")
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T", {}))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        post = lambda p, b: json.loads(urllib.request.urlopen(urllib.request.Request(
+            base + p, json.dumps(b).encode(), {"Content-Type": "application/json"})).read())
+        assert post("/api/like", {"id": "2610.00001", "on": False}) == {"ok": True}
+        assert not pushed.wait(0.3)                                           # un-like: no push
+        assert post("/api/like", {"id": "2610.00001", "on": True}) == {"ok": True}
+        assert pushed.wait(5)
+    finally:
+        httpd.shutdown()
+
+
+def test_bibtex_entry():
+    from digest import bibtex
+    p = {"id": "2610.01234", "date": "2026-10-20", "title": "The  Sheaf & Graph\nNetworks",
+         "authors": ['Kurt G\\"odel', "Ada Lovelace"], "categories": ["cs.LG", "math.AT"]}
+    e = bibtex.entry(p)
+    assert e.startswith("@misc{godel2026sheaf,")
+    assert "title={The Sheaf \\& Graph Networks}" in e and "author={Kurt Gödel and Ada Lovelace}" in e
+    assert "eprint={2610.01234}" in e and "primaryClass={cs.LG}" in e and "year={2026}" in e
+
+
+def test_taste_never_scores_a_reference_paper_against_itself(tmp_path):
+    import numpy as np
+    from digest import db, embed
+    con = db.connect(str(tmp_path / "d.db"))
+    ids = [f"2610.{i:05d}" for i in range(6)]
+    db.upsert(con, [_paper(i) for i in ids], "2026-10-01", {"total": 6, "cost": 0, "calls": 0})
+    rng = np.random.default_rng(0)
+    for i in ids:
+        v = rng.normal(size=384).astype(np.float32)
+        con.execute("INSERT INTO vectors VALUES (?,?)", (i, (v / np.linalg.norm(v)).astype(np.float16).tobytes()))
+    con.commit()
+    for i in ids[:3]:
+        db.set_like(con, i, True)
+    db.set_rating(con, ids[3], 1)                                  # disliked
+    ix = embed.Index(con)
+    raw = embed._taste_loo(ix, [ids[3]], ids[:3], [ids[3]])[0]
+    # with only itself as a negative, leaving it out means no negative penalty at all
+    assert abs(raw - embed.taste_raw(ix.rows([ids[3]]), ix.rows(ids[:3]), ix.rows([]))[0]) < 1e-6
+    assert set(embed.taste_scores(con, ix)) == set(ids)
