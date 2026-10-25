@@ -112,7 +112,7 @@ why-you, scores) and a link to the arXiv PDF (no Zotero storage used). Ratings a
 A paper already in your library is filed into the collection instead of duplicated, and
 un-liking never deletes anything from Zotero.
 
-1. Create a key with **write access** at https://www.zotero.org/settings/keys and add
+1. Create a key with **write access** and **notes access** at https://www.zotero.org/settings/keys and add
    `ZOTERO_API_KEY=...` to `.env` (`ZOTERO_USER_ID` is optional; it's looked up from the key).
 2. `.venv/bin/python run.py --zotero-sync` checks the key and pushes everything you've already
    liked or bookmarked.

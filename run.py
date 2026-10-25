@@ -126,6 +126,9 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         if not me.get("access", {}).get("user", {}).get("write"):
             print(f"The key for {me.get('username')} has no write access to your library; edit it on zotero.org.")
             return 1
+        if cfg.get("zotero", {}).get("note", True) and not me["access"]["user"].get("notes"):
+            print("Note: this key has no notes access. Notes are still written, but the key can't see "
+                  "them (they look missing via the API). Tick 'Allow notes access' on zotero.org to fix.")
         con = db.connect(args.db)
         print(f"Zotero user {me.get('username')} ({me.get('userID')}): {len(zotero.pending(con))} papers to push")
         print(zotero.sync(con, cfg))
