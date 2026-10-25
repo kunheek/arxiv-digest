@@ -11,18 +11,25 @@ announce_types: [new, cross]
 # Describe your interests in plain language. This is the single most
 # important setting: Claude scores every abstract against it.
 interest_profile: |
-  My research interests are in world models in general, and 3D/4D reconstruction and video diffusion transformers in particular.
-  I am also interested in deep learning architectures (i.e., transformers), optimization and Bayesian methods, and probabilistic generative models.
-  I am not interested in medical imaging, remote sensing, pure NLP/LLM papers, adversarial robustness, or federated learning, unless they clearly touch the above.
-  Core interests:
-  - Both optimization-based and feed-forward 3D/4D reconstruction
-  - Efficient inference for video diffusion transformers
-  - Video generation with 3D/4D consistency, camera control, world models
-  - New architectures, such as linear and sparse attention
-  Secondary interests (for inspiration and context):
-  - Probabilistic generative models, including diffusion and score-based models
+  My research focuses on world models, especially 3D/4D reconstruction and video diffusion transformers.
+  
+  Core interests (highest priority):
+  - 3D/4D reconstruction, both optimization-based (e.g., NeRF, 3D Gaussian Splatting) and feed-forward
+  - Video generation with 3D/4D consistency, camera control, and world models
+  - Efficient inference for video diffusion transformers (e.g., caching, distillation, few-step sampling, quantization, sparse attention)
+  - Transformer architectures and alternatives, such as linear and sparse attention
+  
+  Secondary interests (for inspiration and broader context):
+  - Probabilistic generative models, including diffusion, score-based, and flow-matching models
   - Bayesian methods, including MCMC and variational inference
-  - Mathematical/physics perspective of understanding deep learning optimization, attention, etc
+  - Mathematical and physics-based perspectives on deep learning, such as the theory of optimization dynamics and attention (e.g., self-attention as a modern Hopfield network)
+  
+  Not interested (exclude unless the paper clearly connects to a core interest):
+  - Medical imaging
+  - Remote sensing
+  - Pure NLP/LLM papers
+  - Adversarial robustness
+  - Federated learning
 
 # Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
 seed_papers:
@@ -30,9 +37,9 @@ seed_papers:
   - "Shape of Motion: 4D Reconstruction from a Single Video"
 
 # Researchers whose new papers you never want to miss (matched against author lists).
-# Use the name exactly as it appears on arXiv.
+# Use the name exactly as it appears on arXiv (word order matters).
 watch_authors:
-  - Fei-Fei Li
+  - Li Fei-Fei            # how arXiv lists Fei-Fei Li
   - Angjoo Kanazawa
 
 # Institutions / labs (matched case-insensitively against affiliations
@@ -66,8 +73,8 @@ limits:
   summarize_top_k: 15      # Sonnet summaries for the final top K
   db_min_interest: 0       # keep papers scoring >= this in data/digest.db (0 = every scored paper, ~1 MB/day)
   db_max_papers: 300000    # LOCAL database only (never pushed anywhere). FIFO: when it holds more, the
-                           # oldest are deleted (~450/day → ~2.5 years, ~650 MB). Rated and bookmarked
-                           # papers are never deleted. 0 = no limit.
+                           # oldest are deleted (~400/day → ~3 years, ~650 MB). Rated, liked and
+                           # bookmarked papers are never deleted. 0 = no limit.
   site_max_papers: 6000    # PUBLIC GitHub Pages site only: newest N papers (~65 days). The full
                            # history stays in the local DB and the local site (run.py --serve).
   site_min_interest: 2     # show papers with relevance >= this on the website. Deliberately low:
@@ -81,8 +88,8 @@ models:
   score_batch_size: 20          # abstracts per scoring call
 
 feedback:
-  # Papers you rate on the website (1-5 stars; export + `run.py --import-ratings`)
-  # are fed back into the scorer as positive examples.
+  # Papers you like, or rate >= min_rating, on the local site (run.py --serve) are fed back into
+  # the scorer as positive examples. min_rating also sets what counts as a pick for the taste score.
   enabled: true
   min_rating: 4
   max_examples: 30
