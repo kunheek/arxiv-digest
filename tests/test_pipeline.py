@@ -665,9 +665,11 @@ def test_bibtex_entry():
     p = {"id": "2610.01234", "date": "2026-10-20", "title": "The  Sheaf & Graph\nNetworks",
          "authors": ['Kurt G\\"odel', "Ada Lovelace"], "categories": ["cs.LG", "math.AT"]}
     e = bibtex.entry(p)
-    assert e.startswith("@misc{godel2026sheaf,")
+    assert e.startswith("@article{godel2026sheaf,")
     assert "title={The Sheaf \\& Graph Networks}" in e and "author={Kurt Gödel and Ada Lovelace}" in e
-    assert "eprint={2610.01234}" in e and "primaryClass={cs.LG}" in e and "year={2026}" in e
+    assert "journal={arXiv preprint arXiv:2610.01234}" in e and "year={2026}" in e
+    assert bibtex.title("RayCo4D: Ray-Conditioned 4D Motion on $\\mathrm{SE}(3)$ with NeRF/3DGS") == \
+        "{RayCo4D:} Ray-Conditioned {4D} Motion on $\\mathrm{SE}(3)$ with {NeRF}/{3DGS}"
 
 
 def test_taste_never_scores_a_reference_paper_against_itself(tmp_path):

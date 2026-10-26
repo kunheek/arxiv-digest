@@ -1,5 +1,7 @@
-"""BibTeX for arXiv papers, built from the local DB (same @misc form arxiv.org/bibtex/<id> gives).
-No network: works offline and for every paper. The site builds the same entry in app.js."""
+"""BibTeX for arXiv papers, built from the local DB in Google Scholar's form
+(@article, journal = "arXiv preprint arXiv:<id>"), which every bibliography style prints.
+No network and no LLM: title, authors and id are copied from arXiv's own metadata.
+The site builds the same entry in app.js."""
 from __future__ import annotations
 
 import re
@@ -27,17 +29,28 @@ def key(p: dict) -> str:
     return f"{last}{year(p['id'], p.get('date', ''))}{word}"
 
 
+def _protect(word: str) -> str:
+    """Brace capitals that styles must not lowercase: RayCo4D, NeRF, 4D, SE(3)."""
+    if re.search(r"[A-Z]", word[1:]) or (re.search(r"\d", word) and re.search(r"[A-Za-z]", word)):
+        return "{" + word + "}"
+    return word
+
+
+def title(t: str) -> str:
+    t = re.sub(r"(?<!\\)([&%#])", r"\\\1", " ".join(t.split()))
+    return " ".join(
+        w if re.search(r"[$\\{}]", w) else "".join(_protect(x) for x in re.split(r"([-/])", w))
+        for w in t.split(" ")
+    )
+
+
 def entry(p: dict) -> str:
+    # "First Last" as arXiv gives it: BibTeX parses that itself, so no guessing which part is the surname
     authors = " and ".join(clean_name(a) for a in p["authors"])
-    title = re.sub(r"(?<!\\)&", r"\\&", " ".join(p["title"].split()))
-    cats = p.get("categories") or []
     return (
-        f"@misc{{{key(p)},\n"
-        f"      title={{{title}}},\n"
-        f"      author={{{authors}}},\n"
-        f"      year={{{year(p['id'], p.get('date', ''))}}},\n"
-        f"      eprint={{{p['id']}}},\n"
-        f"      archivePrefix={{arXiv}},\n"
-        + (f"      primaryClass={{{cats[0]}}},\n" if cats else "")
-        + f"      url={{https://arxiv.org/abs/{p['id']}}},\n}}\n"
+        f"@article{{{key(p)},\n"
+        f"  title={{{title(p['title'])}}},\n"
+        f"  author={{{authors}}},\n"
+        f"  journal={{arXiv preprint arXiv:{p['id']}}},\n"
+        f"  year={{{year(p['id'], p.get('date', ''))}}}\n}}\n"
     )

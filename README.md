@@ -122,8 +122,11 @@ from `.env` without a restart), and the daily run retries anything that failed.
 Settings: `zotero:` in `config.yaml`.
 
 ### BibTeX
-**Copy BibTeX** in an expanded row (both sites) gives the same `@misc` entry as
-`arxiv.org/bibtex/<id>`, built locally. `.venv/bin/python run.py --export-bib refs.bib` writes
+**Copy BibTeX** in an expanded row (both sites) gives a Google Scholar-style entry
+(`@article`, `journal={arXiv preprint arXiv:<id>}`), which every bibliography style prints in full.
+It's built locally by plain code (no network, no LLM) from arXiv's own title, author list and id,
+with acronyms such as `{NeRF}` and `{4D}` braced so styles don't lowercase them. When a paper is
+later published at a venue, replace the entry with the venue's. `.venv/bin/python run.py --export-bib refs.bib` writes
 all liked/bookmarked papers. For a `.bib` that stays in sync with your library, use Zotero's
 Better BibTeX plugin on the `arxiv-digest` collection.
 

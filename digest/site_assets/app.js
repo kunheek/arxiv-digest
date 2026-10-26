@@ -174,17 +174,19 @@ function rate(id, n) {
     const st = el.querySelector(".stars"); if (st) st.innerHTML = starsHTML(id);
   });
 }
-// Same @misc entry as digest/bibtex.py (and arxiv.org/bibtex/<id>).
+// Same entry as digest/bibtex.py: Google Scholar's @article form, built from arXiv's metadata.
 const STOP = new Set("a an the on of for in to and with towards toward via is".split(" "));
 const ascii = (s) => s.normalize("NFKD").replace(/[^\x00-\x7f]/g, "");
+const protect = (w) => /[A-Z]/.test(w.slice(1)) || (/\d/.test(w) && /[A-Za-z]/.test(w)) ? `{${w}}` : w;
+const bibTitle = (t) => t.split(/\s+/).join(" ").replace(/(?<!\\)([&%#])/g, "\\$1").split(" ")
+  .map((w) => /[$\\{}]/.test(w) ? w : w.split(/([-/])/).map(protect).join("")).join(" ");
 function bibtex(r, d) {
-  const [id, date, title] = r, au = d.au || r[5], cats = d.cat || r[8];
+  const [id, date, title] = r, au = d.au || r[5];
   const year = /^\d{4}\./.test(id) ? "20" + id.slice(0, 2) : date.slice(0, 4);
   const last = au.length ? ascii(au[0].split(/\s+/).pop()).toLowerCase().replace(/[^a-z]/g, "") : "anon";
   const word = (ascii(title).toLowerCase().match(/[a-z0-9]+/g) || []).find((w) => !STOP.has(w)) || "";
-  return `@misc{${last}${year}${word},\n      title={${title.split(/\s+/).join(" ").replace(/(?<!\\)&/g, "\\&")}},\n` +
-    `      author={${au.join(" and ")}},\n      year={${year}},\n      eprint={${id}},\n      archivePrefix={arXiv},\n` +
-    (cats[0] ? `      primaryClass={${cats[0]}},\n` : "") + `      url={https://arxiv.org/abs/${id}},\n}\n`;
+  return `@article{${last}${year}${word},\n  title={${bibTitle(title)}},\n  author={${au.join(" and ")}},\n` +
+    `  journal={arXiv preprint arXiv:${id}},\n  year={${year}}\n}\n`;
 }
 async function copyBib(btn) {
   const r = rows[+btn.closest(".r").dataset.i], d = (await shard(r[1]))[r[0]] || {}, text = bibtex(r, d);
