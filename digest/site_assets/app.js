@@ -189,8 +189,18 @@ function bibtex(r, d) {
 async function copyBib(btn) {
   const r = rows[+btn.closest(".r").dataset.i], d = (await shard(r[1]))[r[0]] || {}, text = bibtex(r, d);
   try { await navigator.clipboard.writeText(text); btn.textContent = "Copied ✓"; }
-  catch { prompt("BibTeX (clipboard needs https or localhost):", text); }  // e.g. served over plain http on the LAN
+  catch { showBib(text); }  // the clipboard API needs https or localhost, e.g. not plain http on the LAN
   setTimeout(() => { btn.textContent = "Copy BibTeX"; }, 1500);
+}
+function showBib(text) {
+  const ta = $("#bibtext");
+  ta.value = text;
+  ta.rows = text.split("\n").length;
+  $("#bibbox").showModal();
+  ta.focus(); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch {}  // older API, still works without https
+  $("#bibmsg").textContent = ok ? "copied ✓" : "selected, press ⌘C / Ctrl+C";
 }
 function showSimilar(p) {
   p.textContent = "…";

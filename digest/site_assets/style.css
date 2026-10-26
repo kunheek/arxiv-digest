@@ -67,6 +67,8 @@ body.dens-dense .sc{font-size:.76rem;margin-top:0}
 body.dens-full .det{display:block}
 .empty{padding:3rem 1rem;text-align:center;color:var(--mute)}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);max-width:34rem}
+#bibbox{width:min(46rem,calc(100vw - 2rem));max-width:none;box-sizing:border-box}
+#bibtext{display:block;width:100%;box-sizing:border-box;margin:.5rem 0 .8rem;font:.8rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:.5rem .6rem;resize:vertical;white-space:pre;overflow:auto}
 dialog::backdrop{background:rgba(0,0,0,.4)}
 dialog h2{font-size:1rem;margin:.2rem 0}dialog table td{padding:.15rem .8rem .15rem 0;font-size:.85rem}
 code,kbd{background:var(--lobg);border-radius:4px;padding:0 .3rem;font-size:.82rem}
