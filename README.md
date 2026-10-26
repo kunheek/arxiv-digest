@@ -4,7 +4,7 @@ Every weekday this scans new **cs.CV, cs.GR, cs.CG, cs.LG and stat.ML** papers, 
 for **relevance to your interests, quality, and field-wide impact** with Claude, boosts papers from
 researchers and labs you watch, summarizes the best ones, and publishes them to a website, with a **Discord** ping when it's updated.
 Everything is archived in a local SQLite database and published as a searchable website
-on **GitHub Pages**. It runs on your own machine: cron on Linux, launchd on macOS.
+on **GitHub Pages**. It runs on your own machine, Linux (systemd timer or cron) or macOS (launchd).
 
 ```
 arXiv RSS (≈ 450 new papers/day)
@@ -26,8 +26,7 @@ git clone https://github.com/kunheek/arxiv-digest.git ~/arxiv-digest && cd ~/arx
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env && chmod 600 .env && nano .env     # ANTHROPIC_API_KEY, optional DISCORD_WEBHOOK
 scripts/run_daily.sh --dry-run --max-papers 20          # test: no Discord, nothing saved
-scripts/install_cron.sh                                 # Linux: Mon–Fri 14:03 and 16:03 KST
-scripts/install_launchd.sh --serve                      # macOS instead: same schedule + local site
+scripts/install.sh --serve                              # Mon–Fri 14:03 and 16:03 KST + local site
 ```
 - **API key:** <https://platform.claude.com> → API keys. The digest uses the API, which is
   billed separately from chat usage.
@@ -35,6 +34,14 @@ scripts/install_launchd.sh --serve                      # macOS instead: same sc
   Each run posts one "digest updated" message with a link to the site (no papers). If the feed
   is empty (e.g. a US holiday) you get a "no new papers" notice instead, and
   failures are posted there too.
+- **`install.sh`** picks the scheduler for the machine: launchd on macOS
+  (`install_launchd.sh`), a systemd user timer on Linux (`install_systemd.sh`), cron where there
+  is no systemd (`install_cron.sh`, no `--serve`). You can also run any of them directly; each
+  takes `--remove` to uninstall.
+- **Linux (systemd):** the timer is `Persistent`, so a run that was due while the machine was
+  off or asleep starts when it's back. The installer enables linger so the jobs run while you're
+  logged out (if that's refused, run `sudo loginctl enable-linger $USER`). Next runs:
+  `systemctl --user list-timers`; site log: `journalctl --user -u arxiv-digest-serve -f`.
 - **Cron** runs in the system timezone (not your shell's `TZ`); the installer converts
   14:03/16:03 KST to it (check with `timedatectl`). The 16:03 run is a
   catch-up in case arXiv's feed was late; it does nothing if 14:03 got today's papers.
@@ -49,7 +56,8 @@ scripts/install_launchd.sh --serve                      # macOS instead: same sc
 | Task | Command |
 |---|---|
 | Run now | `scripts/run_daily.sh` |
-| Show schedule / uninstall | `crontab -l` / `scripts/install_cron.sh --remove` |
+| Show schedule | `systemctl --user list-timers` (Linux) · `launchctl list \| grep arxiv` (macOS) · `crontab -l` (cron) |
+| Uninstall | `scripts/install.sh --remove` |
 | Logs | `tail -f logs/$(date +%Y-%m).log` |
 | Rebuild + publish site (free) | `.venv/bin/python run.py --site-only` |
 | Build only, preview locally | `run.py --site-only --no-publish && cd site && python3 -m http.server` |
@@ -83,7 +91,8 @@ root). Public unless your plan supports private Pages. Controlled by `delivery.s
 ```
 Same UI, but it serves **every** paper in the database straight from SQLite (always current,
 no rebuild after a run). Ratings and bookmarks you set there are saved directly to the
-database, so no export is needed. Keep it running with `tmux`, or as a systemd user service.
+database, so no export is needed. `scripts/install.sh --serve` keeps it running (systemd user
+service on Linux, launchd agent on macOS); without systemd, use `tmux`.
 
 ### Ratings and bookmarks
 Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them with 🔖 (`b`).

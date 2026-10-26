@@ -4,6 +4,7 @@ so the repo never accumulates history)."""
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -20,8 +21,8 @@ def publish(
     remote = _git(["remote", "get-url", "origin"], repo_dir).stdout.strip()
     with tempfile.TemporaryDirectory() as tmp:
         work = os.path.join(tmp, "w")
-        subprocess.run(["cp", "-a", site_dir, work], check=True)
-        _git(["init", "-q", "-b", branch], work)
+        shutil.copytree(site_dir, work, symlinks=True)
+        _git(["init", "-q"], work)  # no -b: git < 2.28 (older distros) lacks it; we push HEAD:branch
         _git(["add", "-A"], work)
         _git(
             [

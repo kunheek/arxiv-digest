@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Daily entry point on your own machine (called by cron on Linux, launchd on macOS).
+# Daily entry point on your own machine (called by a systemd timer or cron on Linux, launchd on macOS).
 #   - pulls config changes you pushed from elsewhere (AUTO_PULL=1)
 #   - runs the digest inside the project's .venv
 #   - logs to logs/YYYY-MM.log
@@ -17,15 +17,24 @@ envval() { [ -f .env ] && grep -E "^[[:space:]]*(export[[:space:]]+)?$1=" .env |
 AUTO_PULL="${AUTO_PULL:-$(envval AUTO_PULL)}"
 WEBHOOK="${DISCORD_WEBHOOK:-$(envval DISCORD_WEBHOOK)}"
 
-# only one run at a time (main + catch-up never overlap)
-skip() { echo "$(date '+%F %T') another run is in progress, skipping" >> "$LOG"; exit 0; }
-if command -v flock >/dev/null 2>&1; then
-  exec 9>"logs/.lock"
-  flock -n 9 || skip
-else  # macOS has no flock(1): an atomic mkdir, taken over if the run holding it has died
-  mkdir logs/.lock.d 2>/dev/null || { kill -0 "$(cat logs/.lock.d/pid 2>/dev/null)" 2>/dev/null && skip; }
-  echo $$ > logs/.lock.d/pid
-  trap 'rm -rf logs/.lock.d' EXIT
+PY="$REPO/.venv/bin/python"
+[ -x "$PY" ] || PY="$(command -v python3)"
+
+# launchd fires at both the standard- and summer-time hours for 14:03/16:03 KST (it can't follow
+# another timezone), so the one that lands an hour early is dropped here
+[ -n "${SKIP_KST_HOUR:-}" ] && [ "$(TZ=Asia/Seoul date +%H)" = "$SKIP_KST_HOUR" ] && exit 0
+
+# only one run at a time (main + catch-up never overlap). flock(2) on fd 9 via Python, because
+# macOS has no flock(1): the lock belongs to the open file, so it stays held by this shell (and
+# run.py) after Python exits, and the kernel drops it when the run ends, even if it was killed.
+exec 9>"logs/.lock"
+"$PY" -c '
+import fcntl, sys
+try: fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError: sys.exit(75)'
+if [ $? -eq 75 ]; then
+  echo "$(date '+%F %T') another run is in progress, skipping" >> "$LOG"
+  exit 0
 fi
 
 {
@@ -35,9 +44,6 @@ fi
     git pull --ff-only --quiet 2>&1 || echo "WARNING: git pull failed; running with local code"
   fi
 } >> "$LOG" 2>&1
-
-PY="$REPO/.venv/bin/python"
-[ -x "$PY" ] || PY="$(command -v python3)"
 
 "$PY" run.py "$@" >> "$LOG" 2>&1
 status=$?
