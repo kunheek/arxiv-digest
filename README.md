@@ -4,7 +4,7 @@ Every weekday this scans new **cs.CV, cs.GR, cs.CG, cs.LG and stat.ML** papers, 
 for **relevance to your interests, quality, and field-wide impact** with Claude, boosts papers from
 researchers and labs you watch, summarizes the best ones, and publishes them to a website, with a **Discord** ping when it's updated.
 Everything is archived in a local SQLite database and published as a searchable website
-on **GitHub Pages**. It runs from cron on your own Linux machine.
+on **GitHub Pages**. It runs on your own machine: cron on Linux, launchd on macOS.
 
 ```
 arXiv RSS (≈ 450 new papers/day)
@@ -26,7 +26,8 @@ git clone https://github.com/kunheek/arxiv-digest.git ~/arxiv-digest && cd ~/arx
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env && chmod 600 .env && nano .env     # ANTHROPIC_API_KEY, optional DISCORD_WEBHOOK
 scripts/run_daily.sh --dry-run --max-papers 20          # test: no Discord, nothing saved
-scripts/install_cron.sh                                 # Mon–Fri 14:03 and 16:03 KST
+scripts/install_cron.sh                                 # Linux: Mon–Fri 14:03 and 16:03 KST
+scripts/install_launchd.sh --serve                      # macOS instead: same schedule + local site
 ```
 - **API key:** <https://platform.claude.com> → API keys. The digest uses the API, which is
   billed separately from chat usage.
@@ -39,6 +40,11 @@ scripts/install_cron.sh                                 # Mon–Fri 14:03 and 16
   catch-up in case arXiv's feed was late; it does nothing if 14:03 got today's papers.
   Cron doesn't catch up on runs missed while the machine was off. Each run `git pull`s first
   (set `AUTO_PULL=0` in `.env` to stop that).
+- **macOS:** `install_launchd.sh` uses launchd rather than cron, because launchd starts a run
+  that was due while the Mac slept as soon as it wakes (one due while it was shut down is still
+  missed). `--serve` also keeps the local site on http://127.0.0.1:8000, started at login. Keep
+  the repo outside `~/Desktop`, `~/Documents` and `~/Downloads`: macOS blocks background jobs
+  from reading those. Uninstall with `scripts/install_launchd.sh --remove`.
 
 | Task | Command |
 |---|---|
