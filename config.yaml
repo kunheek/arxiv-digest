@@ -2,7 +2,12 @@
 #  arXiv daily digest — edit this file to tune your recommendations
 # ─────────────────────────────────────────────────────────────
 
-categories: [cs.CV, cs.CG, cs.LG, stat.ML]
+categories:
+  - cs.CV    # Computer Vision and Pattern Recognition
+  - cs.GR    # Graphics
+  - cs.CG    # Computational Geometry
+  - cs.LG    # Machine Learning
+  - stat.ML  # Machine Learning (Statistics)
 
 # "new" = first appearance, "cross" = cross-listed into one of your categories.
 # Add "replace" / "replace-cross" to also see updated versions (noisy).
@@ -32,9 +37,50 @@ interest_profile: |
   - Federated learning
 
 # Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
+# From your Zotero library (Inbox + Overleaf); general citations such as PyTorch, SMPL and the
+# classic Bayesian-network papers are left out because they say little about taste.
 seed_papers:
+  # 3D Gaussian Splatting
+  - "3D Gaussian Splatting for Real-Time Radiance Field Rendering"
   - "3D Gaussian Splatting as Markov Chain Monte Carlo"
+  - "FineSplat: Fine Patches, Local Groups, Detailed Splats"
+  - "CF-Splat: Closed-Form Triangle Splatting with Mesh Priors"
+  - "SwitchSplat: Learning Discrete Object States from Casually Captured Scenes"
+  # dynamic / 4D reconstruction
   - "Shape of Motion: 4D Reconstruction from a Single Video"
+  - "MoSca: Dynamic Gaussian Fusion from Casual Videos via 4D Motion Scaffolds"
+  - "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering"
+  - "Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting"
+  - "Deformable 3D Gaussians for High-Fidelity Monocular Dynamic Scene Reconstruction"
+  - "Dynamic 3D Gaussians: Tracking by Persistent Dynamic View Synthesis"
+  - "SC-GS: Sparse-Controlled Gaussian Splatting for Editable Dynamic Scenes"
+  - "HiMoR: Monocular Deformable Gaussian Reconstruction with Hierarchical Motion Representation"
+  - "Motion Blender Gaussian Splatting for Dynamic Scene Reconstruction"
+  - "Orientation-anchored Hyper-Gaussian for 4D Reconstruction from Casual Videos"
+  - "GP-4DGS: Probabilistic 4D Gaussian Splatting from Monocular Video via Variational Gaussian Processes"
+  - "RayCo4D: Ray-Conditioned Continuous Motion Model for Monocular 4D Dynamic Reconstruction"
+  - "Causal Spatiotemporal State Evolution for Monocular 4D Reconstruction"
+  - "Learning the 4D World through Point Trajectory Forecasting"
+  - "World Motion Models: Flexible Sequence Modeling of SE(3) Trajectories"
+  # articulated / animatable
+  - "RigGS: Rigging of 3D Gaussians for Modeling Articulated Objects in Videos"
+  - "Template-free Articulated Gaussian Splatting for Real-time Reposable Dynamic View Synthesis"
+  - "3DGS-Avatar: Animatable Avatars via Deformable 3D Gaussian Splatting"
+  - "Watch It Move: Unsupervised Discovery of 3D Joints for Re-Posing of Articulated Objects"
+  - "HumanNeRF: Free-viewpoint Rendering of Moving People from Monocular Video"
+  # video generation and world models
+  - "Wan: Open and Advanced Large-Scale Video Generative Models"
+  - "4Director: Controlling Video World Models with Rigid 3D Geometry"
+  - "MosaiChunk: Compositing Spatio-Temporal Memory for Autoregressive Video Generation"
+  - "LongTake: Learning to Sustain Dynamics in Long-Horizon Video Generation"
+  - "Clean Forcing: Drift-Resistant Autoregressive Video Diffusion with a Frozen Base"
+  # efficient diffusion transformers and attention
+  - "Dynamics-Aware Sparse Attention for Efficient Autoregressive Video Diffusion"
+  - "RECAP: Reciprocal Sparse Attention and Hierarchical Caching for Efficient Video Diffusion"
+  - "MC-Sparse: Deconstructing and Closing the Dense-Sparse Attention Gap in Diffusion Transformers"
+  - "Looped Diffusion Transformer"
+  - "HRoPE: Homography Relative Positional Encoding"
+  - "WorldRoPE: Probabilistic World-Centric Rotary Embedding for Multi-View Attention"
 
 # Researchers whose new papers you never want to miss (matched against author lists).
 # Use the name exactly as it appears on arXiv (word order matters).

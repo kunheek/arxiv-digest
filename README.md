@@ -1,6 +1,6 @@
 # arXiv daily digest
 
-Every weekday this scans new **cs.CV, cs.CG, cs.LG and stat.ML** papers, scores each one
+Every weekday this scans new **cs.CV, cs.GR, cs.CG, cs.LG and stat.ML** papers, scores each one
 for **relevance to your interests, quality, and field-wide impact** with Claude, boosts papers from
 researchers and labs you watch, summarizes the best ones, and publishes them to a website, with a **Discord** ping when it's updated.
 Everything is archived in a local SQLite database and published as a searchable website
