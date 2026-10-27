@@ -21,6 +21,37 @@ input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outli
 .seg button{font:inherit;font-size:.82rem;border:0;background:var(--bg);color:var(--mute);padding:.28rem .6rem;cursor:pointer}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button.on{background:var(--accbg);color:var(--acc);font-weight:600}
+/* day picker: ‹ day › in the toolbar, a month calendar under it */
+.daynav{display:inline-flex;flex:none;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.daynav button{font:inherit;font-size:.86rem;border:0;background:var(--bg);color:var(--fg);padding:.3rem .55rem;cursor:pointer}
+.daynav button+button{border-left:1px solid var(--line)}
+.daynav button:hover:not(:disabled){color:var(--acc)}
+.daynav button:disabled{color:var(--line);cursor:default}
+#day{min-width:8.6rem;font-variant-numeric:tabular-nums}
+#day::after{content:"▾";margin-left:.45rem;color:var(--mute);font-size:.72rem}
+.cal{position:absolute;z-index:6;width:17.5rem;padding:.6rem;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.16)}
+.cal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:.3rem}
+.cal-h b{font-size:.9rem}
+.cal-nav{font:inherit;font-size:1rem;width:1.9rem;height:1.9rem;border:0;border-radius:6px;background:none;color:var(--fg);cursor:pointer}
+.cal-nav:hover:not(:disabled){background:var(--hover);color:var(--acc)}
+.cal-nav:disabled{color:var(--line);cursor:default}
+.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-g .wd{font-size:.66rem;font-weight:600;letter-spacing:.04em;color:var(--mute);text-align:center;padding:.15rem 0 .25rem}
+.cal-g button{font:inherit;font-size:.82rem;font-variant-numeric:tabular-nums;aspect-ratio:1;padding:0;border:0;border-radius:6px;background:none;color:var(--fg);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}
+.cal-g button small{font-size:.6rem;color:var(--mute)}
+.cal-g button:disabled{color:var(--mute);opacity:.4;cursor:default}
+.cal-g .h1{background:color-mix(in srgb,var(--acc) 9%,transparent)}
+.cal-g .h2{background:color-mix(in srgb,var(--acc) 17%,transparent)}
+.cal-g .h3{background:color-mix(in srgb,var(--acc) 27%,transparent)}
+.cal-g .h4{background:color-mix(in srgb,var(--acc) 38%,transparent)}
+.cal-g button:hover:not(:disabled){box-shadow:inset 0 0 0 1.5px var(--acc)}
+.cal-g .today{font-weight:700;text-decoration:underline;text-underline-offset:2px}
+.cal-g button.on{background:var(--acc);color:var(--surface);font-weight:700}
+.cal-g button.on small{color:inherit;opacity:.85}
+.cal-f{display:flex;align-items:center;justify-content:space-between;gap:.4rem;margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--line);white-space:nowrap}
+.cal-f .qn{font-size:.72rem;overflow:hidden;text-overflow:ellipsis}
+.cal-f .btn{font-size:.8rem;padding:.2rem .55rem}
+.cal-f .btn.on{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
 main{padding-top:.5rem;padding-bottom:4rem}
 #summary{display:flex;justify-content:space-between;gap:1rem;color:var(--mute);font-size:.85rem;padding:.2rem 0}
 #summary b{color:var(--fg)}

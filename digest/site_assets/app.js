@@ -35,7 +35,8 @@ function readState() {
 }
 function writeState(s, replace) {
   const p = new URLSearchParams();
-  if (s.d) p.set("d", s.d); if (s.q) p.set("q", s.q); if (s.min !== "0") p.set("min", s.min);
+  p.set("d", s.d);   // always set: "#/?d=" is all days, a bare "#/" means the latest day
+  if (s.q) p.set("q", s.q); if (s.min !== "0") p.set("min", s.min);
   if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.a) p.set("a", "1"); if (s.s) p.set("s", "1");
   const url = "#/" + (p.toString() ? "?" + p : "");
   if (replace) history.replaceState(null, "", url); else location.hash = url;
@@ -259,7 +260,7 @@ async function view(keepScroll) {
   $("#list").innerHTML = "";
   const total = s.d ? DATA.days[s.d]?.total : null;
   $("#summary").innerHTML = `<span><b>${rows.length}</b> paper${rows.length === 1 ? "" : "s"}${s.d ? ` on <b>${s.d}</b>${total ? ` (kept from ${total} scanned)` : ""}` : " across all days"}</span>
-    <span>${s.q || s.min !== "0" || s.w || s.c || s.d ? '<a href="#/?d=${dates[0]}">reset</a>' : ""}</span>`;
+    <span>${s.q || s.min !== "0" || s.w || s.c || s.d ? `<a href="#/?d=${dates[0]}">reset</a>` : ""}</span>`;
   const counts = {};
   for (const r of rows) for (const t of r[4]) counts[t] = (counts[t] || 0) + 1;
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 14);
@@ -270,10 +271,10 @@ async function view(keepScroll) {
 }
 
 function syncControls(s) {
-  const ds = ["", ...dates];
-  const day = $("#day");
-  if (!day.dataset.built) { day.innerHTML = ds.map((d) => `<option value="${d}">${d || "all days"}</option>`).join(""); day.dataset.built = 1; }
-  day.value = s.d; $("#min").value = s.min; $("#q").value !== s.q && document.activeElement !== $("#q") && ($("#q").value = s.q);
+  const day = $("#day"), i = dates.indexOf(s.d);
+  day.value = s.d; day.textContent = dayLabel(s.d); day.title = s.d ? dayInfo(s.d) : "Pick a day";
+  $("#dprev").disabled = i < 0 || i === dates.length - 1; $("#dnext").disabled = i <= 0;
+  closeCal(); $("#min").value = s.min; $("#q").value !== s.q && document.activeElement !== $("#q") && ($("#q").value = s.q);
   $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#a").checked = s.a; $("#s").checked = s.s;
 }
 function setDensity(v) {
@@ -283,7 +284,7 @@ function setDensity(v) {
 
 // ── events ─────────────────────────────────────────────────────────────
 const push = (replace) => { writeState(uiState(), replace); if (replace) view(true); };
-["day", "min", "w", "c", "a", "s"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
+["min", "w", "c", "a", "s"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
 $("#sort").addEventListener("change", (e) => { e.target.dataset.user = 1; push(false); });
 $("#q").addEventListener("input", () => { clearTimeout(view.t); view.t = setTimeout(() => push(true), 200); });
 window.addEventListener("hashchange", () => { $("#sort").dataset.user = readState().sort ? 1 : ""; view(); });
@@ -311,6 +312,103 @@ $("#list").addEventListener("click", (e) => {
 });
 $("#facets").addEventListener("click", (e) => { const t = e.target.closest(".tag"); if (t) addTag(t.dataset.tag); });
 function addTag(t) { const q = $("#q"), term = `tag:"${t}"`; if (!q.value.includes(term)) q.value = (q.value + " " + term).trim(); push(false); }
+// ── day picker: ‹ day › plus a month calendar of the days that have papers ──
+const iso = (y, m, n) => `${y}-${String(m).padStart(2, "0")}-${String(n).padStart(2, "0")}`;
+const dayDate = (d) => { const [y, m, n] = d.split("-").map(Number); return new Date(y, m - 1, n); };  // local, not UTC
+const addDays = (d, k) => { const t = dayDate(d); t.setDate(t.getDate() + k); return iso(t.getFullYear(), t.getMonth() + 1, t.getDate()); };
+function dayLabel(d) {
+  if (!d) return "All days";
+  const o = { weekday: "short", month: "short", day: "numeric" };
+  if (d.slice(0, 4) !== dates[0]?.slice(0, 4)) o.year = "numeric";
+  return dayDate(d).toLocaleDateString("en-US", o);
+}
+function dayInfo(d) {
+  const r = byDate[d] || [], top = r.filter((x) => x[3] >= 7).length, total = DATA.days[d]?.total;
+  return `${dayLabel(d)} · ${r.length} paper${r.length === 1 ? "" : "s"}${top ? `, ${top} top` : ""}${total ? ` (of ${total} scanned)` : ""}`;
+}
+function stepDay(k) {                      // k = 1 older, -1 newer
+  const i = dates.indexOf($("#day").value), n = i < 0 ? null : dates[i + k];
+  if (n) { $("#day").value = n; push(false); }
+}
+function pickDay(d) {
+  closeCal(true);
+  if (d !== $("#day").value) { $("#day").value = d; push(false); }
+}
+const cal = { ym: "", focus: "" };         // month shown ("2026-10") and the day that holds keyboard focus
+const months = () => [...new Set(dates.map((d) => d.slice(0, 7)))];   // newest first
+function renderCal() {
+  const sel = $("#day").value, [y, m] = cal.ym.split("-").map(Number), ms = months(), mi = ms.indexOf(cal.ym);
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, n = new Date(y, m, 0).getDate();
+  const max = Math.max(...dates.map((d) => byDate[d].length)), now = new Date(), today = iso(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  let g = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((w) => `<span class="wd">${w}</span>`).join("") + "<span></span>".repeat(lead);
+  for (let i = 1; i <= n; i++) {
+    const d = iso(y, m, i), c = byDate[d]?.length || 0, td = d === today ? " today" : "";
+    g += c ? `<button data-d="${d}" class="h${Math.ceil((4 * c) / max)}${d === sel ? " on" : ""}${td}" title="${esc(dayInfo(d))}" tabindex="${d === cal.focus ? 0 : -1}">${i}<small>${c}</small></button>`
+           : `<button disabled class="${td}" tabindex="-1">${i}</button>`;
+  }
+  $("#calg").innerHTML = g;
+  $("#calm").textContent = new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const [older, newer] = $("#cal").querySelectorAll(".cal-nav");
+  older.disabled = mi >= ms.length - 1; newer.disabled = mi <= 0;
+  $("#cal").querySelector('.cal-f [data-d=""]').classList.toggle("on", !sel);
+  $("#callatest").dataset.d = dates[0];
+  $("#calsum").textContent = `${dates.length} day${dates.length === 1 ? "" : "s"} · ${DATA.papers.length.toLocaleString()} papers`;
+}
+function showMonth(ym, focus) {            // focus: the day to move keyboard focus to, if any
+  cal.ym = ym;
+  const sel = $("#day").value, inMonth = dates.filter((d) => d.startsWith(ym));
+  cal.focus = focus || (sel.startsWith(ym) ? sel : inMonth[0]);
+  renderCal();
+  if (focus) $(`#calg [data-d="${focus}"]`)?.focus();
+}
+function openCal() {
+  if (!dates.length) return;
+  const d = dates.includes($("#day").value) ? $("#day").value : dates[0];   // also for a hand-typed day with no papers
+  $("#cal").hidden = false; $("#day").setAttribute("aria-expanded", "true");
+  showMonth(d.slice(0, 7), d); placeCal();
+}
+function closeCal(refocus) {
+  if ($("#cal").hidden) return;
+  $("#cal").hidden = true; $("#day").setAttribute("aria-expanded", "false");
+  if (refocus) $("#day").focus();
+}
+function placeCal() {                      // under the day button, kept on screen (the toolbar scrolls sideways on phones)
+  const b = $("#day").getBoundingClientRect(), h = $("header").getBoundingClientRect(), w = $("#cal").offsetWidth;
+  $("#cal").style.top = b.bottom - h.top + 6 + "px";
+  $("#cal").style.left = Math.max(8, Math.min(b.left - h.left, innerWidth - w - 8)) + "px";
+}
+$("#day").addEventListener("click", () => ($("#cal").hidden ? openCal() : closeCal()));
+$("#dprev").addEventListener("click", () => stepDay(1));
+$("#dnext").addEventListener("click", () => stepDay(-1));
+$("#cal").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.disabled) return;
+  if (b.dataset.step) { const ms = months(); showMonth(ms[ms.indexOf(cal.ym) + +b.dataset.step]); }
+  else if ("d" in b.dataset) pickDay(b.dataset.d);
+});
+$("#cal").addEventListener("keydown", (e) => {
+  e.stopPropagation();                     // page shortcuts are off while the calendar has focus
+  if (e.key === "Escape") { closeCal(true); return; }
+  const d = e.target.closest("#calg") && e.target.dataset.d;
+  if (!d) return;
+  const i = dates.indexOf(d), ms = months(), mi = ms.indexOf(cal.ym);
+  const firstOnOrAfter = (t) => [...dates].reverse().find((x) => x >= t), lastOnOrBefore = (t) => dates.find((x) => x <= t);
+  let n;
+  switch (e.key) {
+    case "ArrowLeft": n = dates[i + 1]; break;
+    case "ArrowRight": n = dates[i - 1]; break;
+    case "ArrowUp": n = lastOnOrBefore(addDays(d, -7)); break;
+    case "ArrowDown": n = firstOnOrAfter(addDays(d, 7)); break;
+    case "PageUp": n = ms[mi + 1] && dates.find((x) => x.startsWith(ms[mi + 1])); break;
+    case "PageDown": n = ms[mi - 1] && dates.find((x) => x.startsWith(ms[mi - 1])); break;
+    case "Home": n = dates.at(-1); break;
+    case "End": n = dates[0]; break;
+    default: return;
+  }
+  e.preventDefault(); e.stopPropagation();
+  if (n) showMonth(n.slice(0, 7), n);
+});
+document.addEventListener("pointerdown", (e) => { if (!$("#cal").hidden && !e.target.closest("#cal, #day")) closeCal(); });
+window.addEventListener("resize", () => $("#cal").hidden || placeCal());
 function setCur(i) {
   const els = $("#list").querySelectorAll(".r"); if (!els.length) return;
   cur = Math.max(0, Math.min(els.length - 1, i));
@@ -319,10 +417,9 @@ function setCur(i) {
 document.addEventListener("keydown", (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
-  if (e.key === "Escape") { document.activeElement.blur(); return; }
-  if (typing) return;
+  if (e.key === "Escape") { closeCal(); document.activeElement.blur(); return; }
+  if (typing || (e.key === "Enter" && document.activeElement.tagName === "BUTTON")) return;   // let a focused button take Enter
   const els = $("#list").querySelectorAll(".r"), at = cur >= 0 ? els[cur] : null;
-  const day = () => dates.indexOf($("#day").value);
   switch (e.key) {
     case "/": e.preventDefault(); $("#q").focus(); $("#q").select(); break;
     case "j": setCur(cur + 1); break;
@@ -330,7 +427,7 @@ document.addEventListener("keydown", (e) => {
     case "Enter": case "x": if (at) { e.preventDefault(); open(at); } break;
     case "o": if (at) window.open(at.querySelector(".t").href, "_blank", "noopener"); break;
     case "e": { const all = [...els].some((x) => !x.classList.contains("open")); els.forEach((x) => open(x, all)); break; }
-    case "[": case "]": { const i = day(); if (i < 0) break; const n = dates[i + (e.key === "[" ? 1 : -1)]; if (n) { $("#day").value = n; push(false); } break; }
+    case "[": case "]": stepDay(e.key === "[" ? 1 : -1); break;
     case "l": if (at) like(rows[+at.dataset.i][0]); break;
     case "b": if (at) bookmark(rows[+at.dataset.i][0]); break;
     case "?": $("#helpbox").showModal(); break;

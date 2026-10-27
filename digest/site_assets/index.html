@@ -15,7 +15,7 @@
     <button id="help" class="btn" title="Search syntax and shortcuts">?</button>
   </div>
   <div class="tools">
-    <select id="day" aria-label="Day"></select>
+    <div class="daynav" role="group" aria-label="Day"><button id="dprev" title="Older day  ( [ )" aria-label="Older day">‹</button><button id="day" value="" aria-haspopup="dialog" aria-expanded="false" title="Pick a day"></button><button id="dnext" title="Newer day  ( ] )" aria-label="Newer day">›</button></div>
     <select id="min" aria-label="Minimum score"><option value="0">any score</option><option value="4">≥ 4</option><option value="5">≥ 5</option><option value="6">≥ 6</option><option value="7">≥ 7</option><option value="8">≥ 8</option><option value="9">≥ 9</option></select>
     <select id="sort" aria-label="Sort"><option value="score">best first</option><option value="new">newest first</option><option value="old">oldest first</option></select>
     <label class="chk"><input type="checkbox" id="w"> ⭐ watched</label>
@@ -24,6 +24,11 @@
     <label class="chk" title="Also search TL;DRs and abstracts (loads day files)"><input type="checkbox" id="a"> abstracts</label>
     <span class="grow"></span>
     <div class="seg" id="dens" role="group" aria-label="Density"><button data-v="dense" title="One line per paper">Dense</button><button data-v="compact" title="Two lines, click to expand">Compact</button><button data-v="full" title="Everything expanded">Full</button></div>
+  </div>
+  <div id="cal" class="cal" role="dialog" aria-label="Pick a day" hidden>
+    <div class="cal-h"><button class="cal-nav" data-step="1" aria-label="Previous month">‹</button><b id="calm"></b><button class="cal-nav" data-step="-1" aria-label="Next month">›</button></div>
+    <div class="cal-g" id="calg"></div>
+    <div class="cal-f"><button class="btn" data-d="">All days</button><span class="qn" id="calsum"></span><button class="btn" id="callatest">Latest</button></div>
   </div>
 </header>
 <main>
