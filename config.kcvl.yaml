@@ -9,6 +9,8 @@ categories:
   - cs.GR    # Graphics (avatars, physics-based animation, Gaussian splatting)
   - cs.LG    # Machine Learning (generative models, world models)
   - cs.RO    # Robotics (physical AI, embodied AI, grasping)
+  - cs.AI
+  - stats.ML # Machine Learning (statistics)
 
 # "new" = first appearance, "cross" = cross-listed into one of your categories.
 announce_types: [new, cross]
@@ -45,17 +47,10 @@ interest_profile: |
 
   Secondary interests:
   - Multimodal foundation models and their use in robotics, embodied AI and AI4Science
-  - 3D object detection (incl. semi-supervised), depth estimation, domain adaptation
-  - Action recognition from skeletons, trajectory prediction
-  - Image restoration, low-light enhancement, super-resolution, text-guided image editing
-  - Face analysis, person re-identification
-  - Interpretable machine learning for science (e.g., protein structure and function)
 
   Important beyond these topics (read by everyone in the lab):
   - General-purpose building blocks (architectures, attention, optimizers, training recipes)
   - Methods that transfer across computer vision, graphics, robotics and deep learning
-  - Theory that explains widely used practice
-  These count even when they come from NLP.
 
   Not interested (exclude unless the paper clearly connects to an interest above):
   - Remote sensing and satellite imagery
