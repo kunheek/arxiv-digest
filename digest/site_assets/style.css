@@ -1,4 +1,4 @@
-:root{--bg:#f6f7f9;--surface:#fff;--fg:#1b2130;--mute:#6b7487;--line:#e3e6ec;--acc:#3b5bdb;--accbg:#edf1ff;--hi:#12805c;--hibg:#e3f6ee;--mid:#3b5bdb;--midbg:#edf1ff;--lo:#6b7487;--lobg:#eef0f4;--star:#b7791f;--starbg:#fff4de;--hl:#fff3a3;--row:#fff;--hover:#f1f4ff}
+:root{--ctl:1.9rem;--bg:#f6f7f9;--surface:#fff;--fg:#1b2130;--mute:#6b7487;--line:#e3e6ec;--acc:#3b5bdb;--accbg:#edf1ff;--hi:#12805c;--hibg:#e3f6ee;--mid:#3b5bdb;--midbg:#edf1ff;--lo:#6b7487;--lobg:#eef0f4;--star:#b7791f;--starbg:#fff4de;--hl:#fff3a3;--row:#fff;--hover:#f1f4ff}
 @media (prefers-color-scheme:dark){:root{--bg:#0f121a;--surface:#171b26;--fg:#e8ebf2;--mute:#9099ad;--line:#2a3040;--acc:#8ea8ff;--accbg:#222a45;--hi:#4cc994;--hibg:#16342a;--mid:#8ea8ff;--midbg:#222a45;--lo:#9099ad;--lobg:#232838;--star:#f0b95a;--starbg:#3a2f18;--hl:#5a4d10;--row:#171b26;--hover:#1e2433}}
 *{box-sizing:border-box}
 html{color-scheme:light dark}
@@ -9,6 +9,7 @@ header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1
 .bar,.tools,main{max-width:80rem;margin:0 auto;padding-left:.9rem;padding-right:.9rem}
 .bar{display:flex;gap:.5rem;align-items:center;padding-top:.5rem;padding-bottom:.35rem}
 .brand{font-weight:750;font-size:1rem;color:var(--fg);text-decoration:none;white-space:nowrap}
+.tools select,.tools .seg,.daynav{height:var(--ctl)}   /* one height for every toolbar control */
 .tools{display:flex;gap:.45rem;align-items:center;padding-bottom:.5rem;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
 .grow{flex:1}
 input[type=search],select{font:inherit;font-size:.86rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:.3rem .5rem}
@@ -18,12 +19,12 @@ input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outli
 .btn:hover{border-color:var(--acc);color:var(--acc)}
 .chk{display:inline-flex;gap:.25rem;align-items:center;font-size:.85rem;color:var(--mute);cursor:pointer;user-select:none}
 .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
-.seg button{font:inherit;font-size:.82rem;border:0;background:var(--bg);color:var(--mute);padding:.28rem .6rem;cursor:pointer}
+.seg button{font:inherit;font-size:.82rem;border:0;background:var(--bg);color:var(--mute);padding:0 .6rem;cursor:pointer}
 .seg button+button{border-left:1px solid var(--line)}
 .seg button.on{background:var(--accbg);color:var(--acc);font-weight:600}
 /* day picker: ‹ day › in the toolbar, a month calendar under it */
 .daynav{display:inline-flex;flex:none;border:1px solid var(--line);border-radius:7px;overflow:hidden}
-.daynav button{font:inherit;font-size:.86rem;border:0;background:var(--bg);color:var(--fg);padding:.3rem .55rem;cursor:pointer}
+.daynav button{font:inherit;font-size:.86rem;border:0;background:var(--bg);color:var(--fg);padding:0 .55rem;cursor:pointer}
 .daynav button+button{border-left:1px solid var(--line)}
 .daynav button:hover:not(:disabled){color:var(--acc)}
 .daynav button:disabled{color:var(--line);cursor:default}
