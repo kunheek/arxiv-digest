@@ -29,10 +29,15 @@ interest_profile: |
   - Bayesian methods, including MCMC and variational inference
   - Mathematical and physics-based perspectives on deep learning, such as the theory of optimization dynamics and attention (e.g., self-attention as a modern Hopfield network)
   
+  Important beyond my subfield (I read these too):
+  - General-purpose building blocks (optimizers, normalization, architectures, attention)
+  - Methods that transfer across computer vision, graphics and deep learning
+  - Theory that explains widely used practice
+  These count even when they come from NLP.
+  
   Not interested (exclude unless the paper clearly connects to a core interest):
   - Medical imaging
   - Remote sensing
-  - Pure NLP/LLM papers
   - Adversarial robustness
   - Federated learning
 
@@ -67,6 +72,20 @@ seed_papers:
   - "HRoPE: Homography Relative Positional Encoding"
   - "WorldRoPE: Probabilistic World-Centric Rotary Embedding for Multi-View Attention"
 
+# Papers you value for their field-wide importance rather than your topic: they teach the
+# IMPACT score what "everyone in CV / graphics / DL should read this" means to you.
+# Kept apart from seed_papers so they don't pull the relevance score away from your subfield.
+broad_examples:
+  - "Adam: A Method for Stochastic Optimization"
+  - "Attention Is All You Need"
+  - "Deep Residual Learning for Image Recognition"
+  - "Batch Normalization: Accelerating Deep Network Training by Reducing Internal Covariate Shift"
+  - "Denoising Diffusion Probabilistic Models"
+  - "Flow Matching for Generative Modeling"
+  - "LoRA: Low-Rank Adaptation of Large Language Models"
+  - "Hopfield Networks is All You Need"
+  - "Wan: Open and Advanced Large-Scale Video Generative Models"
+
 # Researchers whose new papers you never want to miss (matched against author lists).
 # Use the name exactly as it appears on arXiv (word order matters).
 watch_authors:
@@ -96,6 +115,8 @@ ranking:
   impact_weight: 0.9       # your interests: final score is at least impact_weight × impact
                            # (a 9 lands at 8.1, among the top picks). They also reach the site
                            # from impact_min − 1 and get a summary. Set impact_min: 11 to disable.
+  impact_review_n: 20      # the summarizer re-judges impact for the top N papers by impact
+                           # (one call, ≈ $0.03/day) so the cheap scorer can't bury them. 0 = off
   quality_weight: 0.3      # 0 = rank by relevance only; 0.3 = a 0-quality paper keeps 70% of its
                            # relevance score, a 10-quality paper keeps 100%. Raise to favour quality.
 

@@ -726,3 +726,31 @@ def test_zotero_child_failure_does_not_duplicate(tmp_path, monkeypatch):
     assert zotero.sync(con, cfg) == "nothing to push"                     # mapped: no second item
     items = [d for d in fake.items.values() if d.get("itemType") == "preprint"]
     assert len(items) == 1 and items[0]["date"] == "2024"                 # submission year, not digest date
+
+
+def test_impact_review_rescues_underrated_paper():
+    import yaml
+    from digest.enrich import final_score
+    from digest.score import build_system, review_impact
+
+    cfg = yaml.safe_load(open("config.yaml"))
+    assert "Adam: A Method for Stochastic Optimization" in build_system(cfg, [])
+
+    class StubLLM:
+        def __init__(self):
+            self.seen = []
+
+        def ask_structured(self, model, system, user, schema, max_tokens=0):
+            self.seen.append((model, system, user))
+            return {"papers": [{"id": "2610.00002", "impact": 8}]}
+
+    papers = [_paper("2610.00001"), _paper("2610.00002"), _paper("2610.00003")]
+    for p, i in zip(papers, (5, 4, 1)):
+        p.interest, p.quality, p.impact = 1, 5, i
+    cfg["ranking"]["impact_review_n"] = 2
+    llm = StubLLM()
+    assert review_impact(papers, cfg, llm) == [papers[1]]
+    model, system, user = llm.seen[0]
+    assert model == cfg["models"]["summarizer"] and "Attention Is All You Need" in system
+    assert "2610.00003" not in user  # only the top N by impact are reviewed
+    assert papers[1].impact == 8 and final_score(papers[1], cfg) >= 7

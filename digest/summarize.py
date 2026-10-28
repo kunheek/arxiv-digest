@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .fetch import Paper
 from .llm import LLM
+from .score import impact_rubric
 
 SYSTEM = """You write a daily paper digest for one researcher.
 
@@ -21,9 +22,9 @@ Given a paper's abstract and introduction, return:
   (strong baselines, ablations, real benchmarks), do the claims match the evidence?
   Judge substance only, not author or lab prestige, and not topic relevance.
 - quality_note: max 12 words: the main strength or weakness
-- impact: 0-10, how important this is to the wider vision / ML community regardless of this
-  researcher's topics (9-10 landmark, rare; 7-8 broadly important; 4-6 notable in its
-  subfield; 0-3 ordinary). Needs a visible broad-significance claim plus evidence."""
+- impact: 0-10, as defined below.
+
+{impact_rubric}"""
 
 SCHEMA = {
     "type": "object",
@@ -40,7 +41,9 @@ SCHEMA = {
 
 
 def summarize(papers: list[Paper], cfg: dict, llm: LLM) -> None:
-    system = SYSTEM.format(profile=cfg["interest_profile"].strip())
+    system = SYSTEM.format(
+        profile=cfg["interest_profile"].strip(), impact_rubric=impact_rubric(cfg)
+    )
     model = cfg["models"]["summarizer"]
 
     def run(p: Paper):

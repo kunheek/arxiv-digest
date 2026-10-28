@@ -29,7 +29,7 @@ from digest.env import load_env
 from digest.enrich import enrich, final_score
 from digest.fetch import fetch_today
 from digest.llm import LLM
-from digest.score import score_all
+from digest.score import review_impact, score_all
 from digest.summarize import summarize
 
 
@@ -211,6 +211,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
 
     print("2/5 scoring abstracts")
     score_all(papers, cfg, llm, liked)
+    if cfg["ranking"].get("impact_review_n", 20):
+        review_impact(papers, cfg, llm)
 
     print("3/5 watchlists + affiliations")
     enrich(papers, cfg)

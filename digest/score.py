@@ -32,15 +32,38 @@ Also rate the paper's QUALITY from the abstract alone, independently of the topi
   0-1  = no substantive contribution visible
 Judge the evidence and the idea, never the authors' or labs' prestige. Do not reward a
 paper for matching the researcher's topic here; that is the relevance score's job.
-Finally rate the paper's IMPACT (0-10), again independently of this researcher's topics:
-would the wider computer-vision / machine-learning community see it as a big or foundational
-contribution (a new foundation model or widely usable open model, a major dataset or
-benchmark, a paradigm-shifting method, a result likely to be cited across subfields)?
-  9-10 = landmark, rare (usually 0-2 papers a day)   7-8 = broadly important
-  4-6  = notable within its subfield                 0-3  = ordinary
-Do not inflate it: impact needs a visible claim of broad significance plus evidence, and
-author or lab prestige alone is not evidence.
+Finally rate the paper's IMPACT (0-10).
+{impact_rubric}
 Score every paper you receive."""
+
+# shared with the impact review below and the summarizer, so all three judge impact alike
+IMPACT_RUBRIC = """IMPACT is independent of this researcher's own subfield: would a broad computer-vision /
+graphics / deep-learning researcher put this paper on their reading list even though it is
+outside their subfield? Papers that earn it:
+  - general-purpose building blocks many models could adopt: optimizers, normalization, losses,
+    architectures, attention and positional encodings, training or sampling recipes
+    (think Adam, the Transformer, BatchNorm, ResNet, LoRA)
+  - generative-modeling frameworks that change how a field works (think DDPM, flow matching, NeRF)
+  - theory that explains or fixes practice everyone uses (why an optimizer, normalization
+    or attention behaves as it does)
+  - widely usable foundation models, datasets or benchmarks
+They can come from any field, NLP included. A simple, general idea with clear evidence counts
+even when the abstract is modest: Adam's made no grand claims.
+  9-10 = could become standard practice or a landmark, rare (usually 0-2 papers a day)
+  7-8  = a broad CV / graphics / DL reader should know about it
+  4-6  = notable within its own subfield              0-3 = ordinary
+Narrow applications, incremental subfield gains and benchmark-chasing score low however strong
+the numbers. Author or lab prestige is not evidence.
+
+<papers_they_value_for_field_wide_importance>
+{broad}
+</papers_they_value_for_field_wide_importance>"""
+
+
+def impact_rubric(cfg: dict) -> str:
+    broad = cfg.get("broad_examples") or []
+    return IMPACT_RUBRIC.format(broad="\n".join(f"- {b}" for b in broad) or "(none)")
+
 
 SCHEMA = {
     "type": "object",
@@ -97,6 +120,7 @@ def build_system(cfg: dict, liked: list[str]) -> str:
     return SYSTEM.format(
         profile=cfg["interest_profile"].strip(),
         seeds="\n".join(f"- {s}" for s in seeds) or "(none)",
+        impact_rubric=impact_rubric(cfg),
     )
 
 
@@ -140,3 +164,65 @@ def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> Non
                 p.tags = list(r.get("tags", []))[:3]
                 scored += 1
     print(f"    scored {scored}/{len(papers)} papers")
+
+
+REVIEW_SYSTEM = """You are a senior computer-vision / graphics / deep-learning researcher giving a second
+opinion on the field-wide IMPACT of today's arXiv papers. A cheaper model rated them first;
+judge each one afresh from its title and abstract (0-10).
+
+{impact_rubric}"""
+
+REVIEW_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "papers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "arXiv id exactly as given"},
+                    "impact": {"type": "number", "description": "field-wide importance, 0-10"},
+                },
+                "required": ["id", "impact"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["papers"],
+    "additionalProperties": False,
+}
+
+
+def review_impact(papers: list[Paper], cfg: dict, llm: LLM) -> list[Paper]:
+    """The summarizer re-judges impact for the top `ranking.impact_review_n` papers by impact,
+    so a general idea the cheap scorer underrated (an Adam, an attention) can still reach the
+    impact floor. Returns the papers whose impact changed."""
+    n = cfg["ranking"].get("impact_review_n", 20)
+    cands = sorted(papers, key=lambda p: (p.impact, p.quality), reverse=True)[:n]
+    if not cands:
+        return []
+    user = "\n\n".join(
+        f'<paper id="{p.id}">\nTitle: {p.title}\nCategories: {", ".join(p.categories)}\n'
+        f"Abstract: {p.abstract[:2500]}\n</paper>"
+        for p in cands
+    )
+    system = REVIEW_SYSTEM.format(impact_rubric=impact_rubric(cfg))
+    try:
+        out = llm.ask_structured(
+            cfg["models"]["summarizer"], system, user, REVIEW_SCHEMA,
+            max_tokens=40 * len(cands) + 300,
+        )
+    except Exception as e:  # keep the scorer's impact if the review fails
+        print(f"    impact review failed, keeping the scorer's ratings: {e}")
+        return []
+    by_id = {p.id: p for p in cands}
+    changed = []
+    for r in out.get("papers", []):
+        p = by_id.get(str(r.get("id", "")).strip().split("v")[0])
+        if p:
+            new = max(0.0, min(10.0, float(r.get("impact", p.impact))))
+            if new != p.impact:
+                p.impact = new
+                changed.append(p)
+    print(f"    re-judged impact for {len(cands)} papers, {len(changed)} changed")
+    return changed

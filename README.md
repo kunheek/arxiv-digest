@@ -9,7 +9,8 @@ on **GitHub Pages**. It runs on your own machine, Linux (systemd timer or cron) 
 ```
 arXiv RSS (≈ 450 new papers/day)
    │
-   ├─ 1. Haiku scores every abstract: relevance, quality, and impact (each 0–10)
+   ├─ 1. Haiku scores every abstract: relevance, quality, and impact (each 0–10);
+   │     Sonnet re-judges impact for the top 20 by impact
    ├─ 2. Watchlist: author names + affiliations (from arXiv HTML, top ~40 only)
    ├─ 3. Rank = relevance × quality factor + author/institution bonus,
    │     floored by impact so big / foundational papers survive any topic
@@ -149,6 +150,9 @@ Better BibTeX plugin on the `arxiv-digest` collection.
 ## Tuning (`config.yaml`)
 - **`interest_profile`** matters most. Be specific about what's core, adjacent and unwanted.
 - **`seed_papers`** are titles that are "exactly my taste".
+- **`broad_examples`** are papers you value for field-wide importance rather than topic (Adam,
+  the Transformer, …). They only teach the impact score, so they don't pull relevance away from
+  your subfield. Add the off-topic papers you put on your reading list.
 - **`ranking.quality_weight`** (0–1): how much estimated quality matters. Final relevance is
   scaled by `1 − w + w·quality/10`, so with the default 0.3 a zero-quality paper keeps 70% of
   its relevance and a 10-quality paper keeps all of it. Quality never rescues an irrelevant
@@ -156,8 +160,12 @@ Better BibTeX plugin on the `arxiv-digest` collection.
   introduction for the top 15) by an LLM, so treat it as a noisy signal: it rewards specific,
   evidenced claims and penalizes vague or hype-heavy ones, not author or lab prestige.
 - **`ranking.impact_min` / `impact_weight`**: big or foundational papers are kept *regardless
-  of your interests*. The scorer rates each paper's field-wide impact (new foundation model,
-  major dataset or benchmark, paradigm shift; prestige alone doesn't count). At
+  of your interests*. The scorer rates each paper's field-wide impact: would a broad CV /
+  graphics / DL researcher read it outside their subfield? General building blocks (optimizers,
+  normalization, attention), new generative frameworks, theory behind common practice, and
+  widely usable models or datasets count, from any field; prestige alone doesn't. Because Haiku
+  judging this from an abstract is the weak step, the summarizer re-judges the top
+  `impact_review_n` (20) papers by impact in one call (≈ $0.03/day; 0 turns it off). At
   `impact_min` (7) or above, a paper's final score is at least `impact_weight` × impact, so a
   9 lands at 8.1 among the top picks, gets a summary, and shows on the site with a 📌 even if
   it's far from your topics. Papers from `impact_min − 1` also appear on the site. Raise
