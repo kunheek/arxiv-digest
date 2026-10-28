@@ -98,16 +98,16 @@ service on Linux, launchd agent on macOS); without systemd, use `tmux`.
 
 ### A shared lab server
 A second digest (for example a lab's) runs from its own clone on another machine, with its own
-config, `.env` and database, and is only served, never published. `config.lab.yaml` is one
+config, `.env` and database, and is only served, never published. `config.kcvl.yaml` is one
 (`delivery.publish: false`, `site: false`):
 ```bash
-scripts/install.sh --serve --config config.lab.yaml --host 0.0.0.0   # http://<machine>:8000
+scripts/install.sh --serve --config config.kcvl.yaml --host 0.0.0.0   # http://<machine>:8000
 ```
 - The site has **no login**: anyone who can reach the port can read it and change ratings, and
   everyone's likes and ratings train the scorer (shared taste). Keep it on the lab network or
   behind a VPN / SSH tunnel.
 - Leave your personal `ZOTERO_API_KEY` out of that machine's `.env`, or the lab's likes land in
-  your library. Discord works, but without publishing the message has no link.
+  your library; `config.kcvl.yaml` turns Zotero and Discord off (`zotero.enabled`, `delivery.discord`).
 - Use a separate clone on a separate machine (or user account): the database, `state/seen.json`
   and logs live in the clone, and the scheduled jobs have fixed names, so installing a second
   digest on the same account replaces the first one's jobs.
@@ -153,7 +153,7 @@ un-liking never deletes anything from Zotero.
 
 From then on each like/bookmark is pushed in the background (the running server picks up the key
 from `.env` without a restart), and the daily run retries anything that failed.
-Settings: `zotero:` in `config.yaml`.
+Settings: `zotero:` in `config.yaml`; `enabled: false` turns it off even when `.env` has a key.
 
 ### BibTeX
 **Copy BibTeX** in an expanded row (both sites) gives a Google Scholar-style entry

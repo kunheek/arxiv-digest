@@ -48,7 +48,7 @@ def _push_to_zotero(db_path: str, pid: str, cfg: dict) -> None:
     try:
         from . import zotero
 
-        if not zotero.configured():
+        if not zotero.enabled(cfg) or not zotero.configured():
             return
         con = db.connect(db_path)
         try:

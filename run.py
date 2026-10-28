@@ -118,6 +118,9 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     if args.zotero_sync:
         from digest import zotero
 
+        if not zotero.enabled(cfg):
+            print(f"Zotero is turned off in {args.config} (zotero.enabled: false).")
+            return 1
         if not zotero.configured():
             print("ZOTERO_API_KEY is not set. Create a key with write access at "
                   "https://www.zotero.org/settings/keys and put it in .env (see .env.example).")
@@ -291,7 +294,7 @@ def after_delivery(con, cfg: dict, today: str) -> None:
     try:  # retry anything a click on the local site failed to push
         from digest import zotero
 
-        if zotero.configured():
+        if zotero.enabled(cfg) and zotero.configured():
             print(f"    zotero: {zotero.sync(con, cfg)}")
     except Exception as e:  # noqa: BLE001
         print(f"    (zotero sync skipped: {e})")

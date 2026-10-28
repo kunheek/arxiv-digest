@@ -49,7 +49,25 @@ fi
 status=$?
 echo "exit status: $status" >> "$LOG"
 
-if [ $status -ne 0 ] && [ -n "${WEBHOOK:-}" ]; then
+# the failure notice follows the config's delivery.discord (the one passed with --config, if any)
+CFG=config.yaml; prev=""
+for a in "$@"; do
+  case "$a" in --config=*) CFG="${a#*=}" ;; *) [ "$prev" = "--config" ] && CFG="$a" ;; esac
+  prev="$a"
+done
+discord_on() {
+  "$PY" - "$CFG" <<'EOF' 2>/dev/null
+import sys
+try:
+    import yaml
+    d = (yaml.safe_load(open(sys.argv[1])) or {}).get("delivery") or {}
+except Exception:  # an unreadable config may be why the run failed: still report it
+    sys.exit(0)
+sys.exit(0 if d.get("discord", True) else 1)
+EOF
+}
+
+if [ $status -ne 0 ] && [ -n "${WEBHOOK:-}" ] && discord_on; then
   tail_txt="$(tail -n 15 "$LOG" | cut -c1-180)"
   msg="⚠️ **arXiv digest failed** on $(hostname) (exit $status). Last lines of \`$LOG\`:"
   "$PY" - "$WEBHOOK" "$msg" "$tail_txt" <<'EOF' >> "$LOG" 2>&1 || true

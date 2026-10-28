@@ -754,3 +754,20 @@ def test_impact_review_rescues_underrated_paper():
     assert model == cfg["models"]["summarizer"] and "Attention Is All You Need" in system
     assert "2610.00003" not in user  # only the top N by impact are reviewed
     assert papers[1].impact == 8 and final_score(papers[1], cfg) >= 7
+
+
+def test_zotero_disabled_in_config_never_pushes(tmp_path, monkeypatch):
+    from digest import db, serve, zotero
+    monkeypatch.setenv("ZOTERO_API_KEY", "k")                      # a key is present, but the config says no
+    pushed = []
+    monkeypatch.setattr(zotero, "push", lambda con, pid, cfg: pushed.append(pid))
+    path = str(tmp_path / "d.db")
+    db.connect(path).close()
+    assert zotero.enabled({}) and zotero.enabled({"zotero": {}}) and zotero.enabled({"zotero": None})
+    serve._push_to_zotero(path, "2610.00001", {"zotero": {"enabled": False}})
+    assert pushed == [] and not zotero.enabled({"zotero": {"enabled": False}})
+    serve._push_to_zotero(path, "2610.00001", {"zotero": {}})
+    assert pushed == ["2610.00001"]
+    cfg = tmp_path / "lab.yaml"
+    cfg.write_text("zotero: {enabled: false}\ndelivery: {}\n")
+    assert run.main(["--config", str(cfg), "--zotero-sync", "--db", path]) == 1

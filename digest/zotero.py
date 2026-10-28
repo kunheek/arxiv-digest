@@ -31,6 +31,11 @@ _lock = threading.Lock()  # one push at a time: a like + bookmark on the same pa
 _user: str | None = None
 
 
+def enabled(cfg: dict) -> bool:
+    """False when the config turns Zotero off (zotero.enabled: false), whatever .env holds."""
+    return (cfg.get("zotero") or {}).get("enabled", True) is not False
+
+
 def configured() -> bool:
     """True once ZOTERO_API_KEY is set. Re-reads .env while it's missing, so adding the key
     takes effect without restarting the local server."""

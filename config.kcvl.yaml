@@ -156,16 +156,16 @@ feedback:
   max_examples: 40
 
 zotero:
-  # Only active if ZOTERO_API_KEY is in the .env next to this file. Leave it out on the lab
-  # machine unless the lab has a shared Zotero group, or everyone's likes land in one library.
+  # Off for the lab: likes and bookmarks stay on the lab server, even if .env holds a Zotero key.
+  enabled: false
   collection: arxiv-digest-lab
   tag: arxiv-digest-lab
   note: true
   pdf_link: true
 
 delivery:
-  discord: true              # needs DISCORD_WEBHOOK in .env; without publishing the message has no link
+  discord: false             # off for the lab: no digest, empty-feed or failure messages
   site: false                # no static site/: the lab reads the live server (run.py --serve)
   publish: false             # never push to GitHub Pages
-  publish_branch: gh-pages
+  publish_branch: gh-pages   # not used
   site_title: KCVL arXiv digest
