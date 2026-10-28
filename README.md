@@ -63,7 +63,7 @@ scripts/install.sh --serve                              # Mon–Fri 14:03 and 16
 | Logs | `tail -f logs/$(date +%Y-%m).log` |
 | Rebuild + publish site (free) | `.venv/bin/python run.py --site-only` |
 | Build only, preview locally | `run.py --site-only --no-publish && cd site && python3 -m http.server` |
-| Full review of a paper (≈ $0.40) | `.venv/bin/python run.py --review 2610.31642` |
+| Explain a paper (≈ $0.20), also a button on the local site | `.venv/bin/python run.py --explain 2610.31642` |
 | Tests | `.venv/bin/pip install pytest && .venv/bin/python -m pytest -q` |
 
 ## Website
@@ -169,18 +169,30 @@ later published at a venue, replace the entry with the venue's. `.venv/bin/pytho
 all liked/bookmarked papers. For a `.bib` that stays in sync with your library, use Zotero's
 Better BibTeX plugin on the `arxiv-digest` collection.
 
-### Full-paper reviews
-For a paper worth a closer look, `.venv/bin/python run.py --review 2610.31642` has Opus 5.5 read
-the whole PDF, figures included, and write a peer review. The review covers the paper's summary,
-strengths, weaknesses, a check of the key derivations, the experiments, questions for the authors,
-and a 1–10 verdict. Pass several ids or arXiv links at once. Only the papers you name are reviewed;
-the daily digest never starts one.
+### Paper explanations (📖)
+Expand a paper on the local site and click **📖 Explain this paper**. Opus 5.5 reads the whole
+PDF, figures included, and writes down its key information: the problem, the key idea, how the
+method works, the main results with the paper's own numbers, what's new, the limitations the
+authors state, and key terms. It is told to report only what the paper says and to write
+"not reported" instead of guessing; it doesn't critique or score the paper.
 
-- Each review is written to `reviews/<id>.md`. Its cost is appended to `reviews/costs.csv`
-  (date, id, model, tokens, USD), and the run prints the total so far.
-- Expect about **$0.40 and 2 minutes** for a 10-page paper, and more for long appendices.
-  `models.reviewer` and `models.review_effort` in `config.yaml` set the model and depth.
-  `claude-sonnet-5-5` costs about half as much but writes shallower critiques.
+- **Cost and time:** about **$0.20 and a minute** per paper. A confirmation dialog shows this
+  before anything is spent. You can keep browsing while it's written.
+- **Where to find them:** the result appears under the paper. Papers that have one show 📖 in
+  the list, and `is:explained` finds them all. Each paper is explained once and then reused,
+  even if two people click at the same time.
+- **Public site:** GitHub Pages shows existing explanations read-only. Requesting a new one
+  needs the local server, since it holds the API key.
+- **From the terminal:** `.venv/bin/python run.py --explain 2610.31642 [more ids or links]`
+  explains papers, or re-explains ones already done.
+- **Settings and spend:** these are under `explain:` in `config.yaml`.
+  - `enabled: false` hides the button.
+  - `daily_budget_usd` (default 5) makes the local site refuse new requests once that day's
+    explanations cost that much. On a shared lab server, anyone who can open the site can
+    spend up to this amount.
+  - Every call's cost is logged in the database (table `explain_costs`), and `run.py --explain`
+    prints the total so far.
+  - Explained papers are never pruned.
 - If Opus declines a paper on policy grounds, the API retries it on its default fallback model.
 
 ## Tuning (`config.yaml`)

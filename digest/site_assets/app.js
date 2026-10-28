@@ -10,6 +10,9 @@ let rows = [], shown = 0, cur = -1, freeTerms = [], renderToken = 0;
 // the database. The public GitHub Pages site is read-only: it shows the same picks, published
 // from the database as data/prefs.json.
 let ratings = {}, saved = new Set(), liked = new Set(), taste = {}, LOCAL = false;
+// Papers with an explanation (Opus read the whole PDF). Both sites show them; only the local
+// server can request a new one (EXPLAIN_ON: explain.enabled and an API key on the server).
+let explained = new Set(), EXPLAIN_ON = false;
 const post = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
   .then(() => { clearTimeout(post.t); post.t = setTimeout(() => refreshTaste(false), 800); }).catch(() => {});  // picks changed → new taste
 // Taste scores (local only): "for you ♥" sort + ♥ badges, re-fetched whenever your picks change.
@@ -84,7 +87,7 @@ function matchTok(t, r, full) {
     case "has": ok = t.v === "code" ? !!r[7] : false; break;
     case "is": ok = t.v === "watch" ? !!r[6] : t.v === "top" ? r[3] >= 7
       : t.v === "landmark" ? (r[11] ?? 0) >= 7
-      : t.v === "saved" ? saved.has(r[0]) : t.v === "liked" ? liked.has(r[0]) : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
+      : t.v === "explained" ? explained.has(r[0]) : t.v === "saved" ? saved.has(r[0]) : t.v === "liked" ? liked.has(r[0]) : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
     default: {
       let hay = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase();
       if (full) hay += " " + (full.tldr + " " + full.why + " " + full.abs).toLowerCase();
@@ -138,7 +141,7 @@ function rowHTML(r, i, showDate) {
     <div class="sc ${cls(score)}" title="score">${score.toFixed(1)}</div>
     <div class="main">
       <a class="t" href="https://arxiv.org/abs/${id}" target="_blank" rel="noopener">${hl(title)}</a>
-      <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}${(r[11] ?? 0) >= 7 ? ' <span title="big / foundational paper (field-wide impact ' + r[11].toFixed(0) + ')">📌</span>' : ""}</span>
+      <span class="ic">${watch ? '<span title="watched author / institution">⭐</span>' : ""}${code ? ' <span title="has code">💻</span>' : ""}${(r[11] ?? 0) >= 7 ? ' <span title="big / foundational paper (field-wide impact ' + r[11].toFixed(0) + ')">📌</span>' : ""}${explained.has(id) ? ' <span title="has an explanation (expand the row)">📖</span>' : ""}</span>
       <span class="rb">${ratings[id] ? "★" + ratings[id] : ""}</span><button class="lk${liked.has(id) ? " on" : ""}" title="like (l)">♥</button><button class="bm${saved.has(id) ? " on" : ""}" title="bookmark (b)">🔖</button>
       <span class="fa">${esc(authorsShort(r, 1))}</span>
       <div class="sub"><span title="estimated paper quality (0-10)">Q${(r[10] ?? 5).toFixed(0)}</span>${taste[id] != null ? ` · <span title="how close to the papers you liked (0-10, local embeddings)">♥${taste[id].toFixed(0)}</span>` : ""} · ${esc(authorsShort(r, 4))} · ${tags.map((t) => `<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join(" ")}</div>
@@ -160,8 +163,60 @@ async function fillDet(el) {
     (badges ? `<p>${badges}</p>` : "") +
     `<p class="qn">Quality ${(r[10] ?? 5).toFixed(1)} · Impact ${(r[11] ?? 0).toFixed(1)}${d.qn ? " — " + esc(d.qn) : ""}</p>` +
     (d.abs ? `<p class="abs">${hl(d.abs)}</p>` : "") + `<div class="stars" data-id="${r[0]}">${starsHTML(r[0])}</div>` +
-    `<p class="acts"><button class="act bibbtn">Copy BibTeX</button>` +
-    (LOCAL ? ` <button class="act simbtn">Show similar papers</button>` : "") + `</p><div class="sim" data-id="${r[0]}"></div>`;
+    `<p class="acts">${explainBtn(r[0])}<button class="act bibbtn">Copy BibTeX</button>` +
+    (LOCAL ? ` <button class="act simbtn">Show similar papers</button>` : "") + `</p><div class="xp" data-id="${r[0]}" hidden></div><div class="sim" data-id="${r[0]}"></div>`;
+}
+// ── explanations: the paper's key points, written by Opus from the whole PDF ──
+const explainBtn = (id) => explained.has(id) ? '<button class="act xbtn on">📖 Key points</button> '
+  : EXPLAIN_ON ? '<button class="act xbtn" title="Opus reads the whole PDF, figures included, and writes down the key points (≈ $0.20, about a minute)">📖 Explain this paper</button> ' : "";
+const getX = (id) => fetch(`data/x/${id}.json`, { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
+async function explainPaper(btn) {
+  const box = btn.closest(".det").querySelector(".xp"), id = box.dataset.id;
+  if (box.dataset.done) { box.hidden = !box.hidden; return; }          // already shown: toggle
+  box.hidden = false; box.textContent = "…";
+  let x = explained.has(id) ? await getX(id) : null;   // else ask the server, which returns any existing one
+  if (!x || x.status === "failed") {
+    if (!EXPLAIN_ON) { box.textContent = "No explanation for this paper yet."; return; }
+    if (!confirm("Opus will read the whole PDF and write down this paper's key points.\nAbout $0.20 and a minute. Go ahead?")) { box.hidden = true; return; }
+    const r = await fetch("api/explain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    x = await r.json().catch(() => ({}));
+    if (!r.ok) { box.textContent = "Couldn't start: " + (x.error || r.status); return; }
+  }
+  btn.disabled = true;
+  const t0 = Date.now();
+  while (x.status === "pending") {                                      // written in the background; poll
+    box.innerHTML = `<p class="qn">Opus is reading the paper… ${Math.round((Date.now() - t0) / 1000)} s (usually about a minute; you can keep browsing)</p>`;
+    await sleep(4000);
+    x = (await getX(id)) || x;
+  }
+  btn.disabled = false;
+  if (x.status !== "done") { box.innerHTML = `<p class="qn">Explanation failed: ${esc(x.error || "unknown error")}. Click to try again.</p>`; return; }
+  explained.add(id); btn.textContent = "📖 Key points"; btn.classList.add("on");
+  box.dataset.done = 1;
+  box.innerHTML = md(x.text) + `<p class="qn">Written by ${esc(x.model)} from the PDF on ${esc((x.at || "").slice(0, 10))} · $${(+x.cost || 0).toFixed(2)} · check numbers against the paper before citing</p>`;
+}
+// Tiny Markdown → HTML for explanations: ## headings, paragraphs, - / 1. lists (two levels),
+// **bold**, *italic*, `code`, pipe tables and \\* escapes. Everything is HTML-escaped first.
+function md(src) {
+  const inl = (s) => esc(s).replace(/\\([\\`*_|#])/g, (m, c) => `&#${c.charCodeAt(0)};`).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s.,;:)]|$)/g, "$1<i>$2</i>");
+  let html = "", para = [], depth = 0, rows = null;
+  const lists = (to) => { while (depth > to) { html += "</ul>"; depth--; } };
+  const flush = () => {
+    if (para.length) { html += `<p>${inl(para.join(" "))}</p>`; para = []; }
+    if (rows) { html += "<table>" + rows.map((r, i) => "<tr>" + r.map((c) => (i ? `<td>${inl(c)}</td>` : `<th>${inl(c)}</th>`)).join("") + "</tr>").join("") + "</table>"; rows = null; }
+  };
+  for (const line of src.split("\n")) {
+    const t = line.trim(), h = t.match(/^#{1,6}\s+(.*)/), li = line.match(/^(\s*)(?:[-*]|\d+[.)])\s+(.*)/);
+    if (h) { flush(); lists(0); html += `<h4>${inl(h[1])}</h4>`; }
+    else if (li) { flush(); const d = li[1].length >= 2 ? 2 : 1; while (depth < d) { html += "<ul>"; depth++; } lists(d); html += `<li>${inl(li[2])}</li>`; }
+    else if (t.startsWith("|")) { if (para.length) flush(); lists(0); if (!/^\|[\s:|-]+\|$/.test(t)) (rows ||= []).push(t.replace(/^\||\|$/g, "").split("|").map((c) => c.trim())); }
+    else if (!t) { flush(); lists(0); }
+    else if (depth && /^\s/.test(line)) html = html.replace(/<\/li>$/, " " + inl(t) + "</li>");   // wrapped list item
+    else { if (rows) flush(); lists(0); para.push(t); }
+  }
+  flush(); lists(0);
+  return html;
 }
 const starsHTML = (id) => !LOCAL ? (ratings[id] ? "Your rating: " + "★".repeat(ratings[id]) : "") : "Your rating: " + [1, 2, 3, 4, 5].map((n) =>
   `<button class="star${(ratings[id] || 0) >= n ? " on" : ""}" data-n="${n}" title="${n} (key ${n})">★</button>`).join("");
@@ -298,6 +353,8 @@ $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
   const bb = e.target.closest(".bibbtn");
   if (bb) return copyBib(bb);
+  const xb = e.target.closest(".xbtn");
+  if (xb) return explainPaper(xb);
   const sb = e.target.closest(".simbtn");
   if (sb) { const box = sb.closest(".det").querySelector(".sim"); sb.remove(); return showSimilar(box); }
   const lk = e.target.closest(".lk");
@@ -440,10 +497,11 @@ new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < rows.leng
 setDensity(store.get("dens", "compact"));
 fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
   if (st && st.ratings) { LOCAL = true;
-    refreshTaste(); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local"; return; }
+    refreshTaste(); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local";
+    explained = new Set(st.explained || []); EXPLAIN_ON = !!st.explain_on; return; }
   document.body.classList.add("ro");  // public site: read-only mirror of the local picks
   return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
-    .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); liked = new Set(pf.likes || []); } });
+    .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); liked = new Set(pf.likes || []); explained = new Set(pf.explained || []); } });
 }).then(() => fetch("data/index.json")).then((r) => r.json()).then((d) => {
   DATA = d;
   for (const r of d.papers) (byDate[r[1]] ||= []).push(r);

@@ -75,7 +75,7 @@ class LLM:
     ) -> tuple[str, float, object]:
         """Send a whole PDF (each page as text + image) and return (reply, cost, usage).
 
-        Streams, because a long review with thinking can outlast a plain request's timeout.
+        Streams, because a long answer with thinking can outlast a plain request's timeout.
         If the model declines on policy grounds, the API retries on its default fallback model.
         """
         content = [

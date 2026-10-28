@@ -479,6 +479,7 @@ def test_local_server_serves_everything_and_saves_state(tmp_path):
         post("/api/bookmark", {"id": "2610.0001", "on": True})
         post("/api/like", {"id": "2610.0002", "on": True})
         st = json.loads(urllib.request.urlopen(base + "/api/state").read())
+        assert st.pop("explained") == [] and st.pop("explain_on") in (True, False)
         assert st == {"ratings": {"2610.0002": 5}, "bookmarks": ["2610.0001"], "likes": ["2610.0002"]}
         assert b"app.js" in urllib.request.urlopen(base + "/").read()
         assert urllib.request.urlopen(base + "/app.js").status == 200
@@ -531,7 +532,7 @@ def test_public_site_mirrors_local_preferences(tmp_path):
     out = str(tmp_path / "site")
     site.build(con, out, "T", 2, 11, max_papers=2)
     prefs = json.load(open(os.path.join(out, "data", "prefs.json")))
-    assert prefs == {"ratings": {"2610.00000": 5}, "bookmarks": ["2610.00001"], "likes": []}
+    assert prefs == {"ratings": {"2610.00000": 5}, "bookmarks": ["2610.00001"], "likes": [], "explained": []}
     idx = json.load(open(os.path.join(out, "data", "index.json")))
     assert {"2610.00000", "2610.00001"} <= {r[0] for r in idx["papers"]}
     assert "export" not in open(os.path.join(out, "index.html")).read().lower()
@@ -814,7 +815,7 @@ def test_db_is_wal_and_index_rev_ignores_picks(tmp_path):
 
 
 class FakeStreamClient:
-    """Mimics anthropic.Anthropic().beta.messages.stream(...) for the PDF review."""
+    """Mimics anthropic.Anthropic().beta.messages.stream(...) for paper explanations."""
 
     def __init__(self):
         self.beta = types.SimpleNamespace(messages=self)
@@ -829,32 +830,107 @@ class FakeStreamClient:
             usage=types.SimpleNamespace(input_tokens=28781, output_tokens=13527),
             content=[
                 types.SimpleNamespace(type="thinking", thinking=""),
-                types.SimpleNamespace(type="text", text="# Review\n\n## 1. Summary\nGood paper."),
+                types.SimpleNamespace(type="text", text="## In short\nIt fixes softmax."),
             ],
         )
         yield types.SimpleNamespace(get_final_message=lambda: msg)
 
 
-def test_review_mode_writes_review_and_logs_cost(tmp_path, monkeypatch):
-    import csv
-    from digest import review as review_mod
+def test_explain_cli_stores_explanation_and_logs_cost(tmp_path, monkeypatch):
+    from digest import db, explain
 
     pdfs = []
-    monkeypatch.setattr(review_mod, "fetch_pdf", lambda pid: pdfs.append(pid) or b"%PDF-1.7 fake")
+    monkeypatch.setattr(explain, "fetch_pdf", lambda pid: pdfs.append(pid) or b"%PDF-1.7 fake")
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    monkeypatch.chdir(tmp_path)
     client = FakeStreamClient()
-    args = ["--config", os.path.join(root, "config.yaml"), "--review",
+    path = str(tmp_path / "d.db")
+    args = ["--config", os.path.join(root, "config.yaml"), "--db", path, "--explain",
             "https://arxiv.org/abs/2610.31642v2", "not-an-id", "arXiv:2610.00001"]
     assert run.main(args, llm=LLM(client)) == 1  # the bad id fails, the other two still run
 
-    assert pdfs == ["2610.31642v2", "2610.00001"]
+    assert pdfs == ["2610.31642", "2610.00001"]  # versionless: the same row as the site's
     req = client.requests[0]
     assert req["model"] == "claude-opus-5-5" and req["fallbacks"] == "default"
     assert req["messages"][0]["content"][0]["type"] == "document"
-    text = (tmp_path / "reviews/2610.31642v2.md").read_text()
-    assert "## 1. Summary" in text and "$0.386" in text
-    rows = list(csv.DictReader(open(tmp_path / "reviews/costs.csv")))
-    assert [r["id"] for r in rows] == ["2610.31642v2", "2610.00001"]
-    assert float(rows[0]["cost_usd"]) == pytest.approx((28781 * 4 + 13527 * 20) / 1e6, abs=1e-4)
-    assert review_mod.total_cost("reviews") == (2, pytest.approx(2 * 0.3857, abs=1e-3))
+    assert "Do not review" in req["system"]
+    con = db.connect(path)
+    x = db.get_explanation(con, "2610.31642")
+    assert x["status"] == "done" and x["text"] == "## In short\nIt fixes softmax."
+    one = (28781 * 4 + 13527 * 20) / 1e6
+    assert x["cost"] == pytest.approx(one)
+    assert db.explain_spent(con) == (2, pytest.approx(2 * one))
+    # re-explaining replaces the text but keeps both costs in the log
+    assert run.main(args[:-2], llm=LLM(client)) == 0
+    assert db.explain_spent(con) == (3, pytest.approx(3 * one))
+
+
+def test_site_button_explains_once_within_budget(tmp_path, monkeypatch):
+    import http.server
+    import threading
+    import time
+    import urllib.error
+    import urllib.request
+    from digest import db, explain, serve, site
+
+    monkeypatch.setattr(explain, "fetch_pdf", lambda pid: b"%PDF-1.7 fake")
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    db.upsert(con, [_paper(f"2610.000{i}", interest=9, final=9) for i in (1, 2, 3)],
+              "2026-10-16", {"total": 3, "cost": 0, "calls": 0})
+    client = FakeStreamClient()
+    cfg = {"explain": {"enabled": True, "daily_budget_usd": 0.5}}
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T", cfg, LLM(client)))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+
+    def call(p, body=None):
+        req = urllib.request.Request(base + p, json.dumps(body).encode() if body else None,
+                                     {"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read())
+
+    def wait(pid):
+        for _ in range(100):
+            code, x = call(f"/data/x/{pid}.json")
+            if x.get("status") != "pending":
+                return x
+            time.sleep(0.02)
+
+    try:
+        assert call("/api/state")[1]["explain_on"] is True
+        assert call("/data/x/2610.0001.json")[0] == 404
+        code, x = call("/api/explain", {"id": "2610.0001"})
+        assert code == 202 and x["status"] in ("pending", "done")
+        x = wait("2610.0001")
+        assert x["status"] == "done" and "It fixes softmax." in x["text"] and x["cost"] > 0.38
+        assert call("/api/explain", {"id": "2610.0001"})[0] == 200   # done: no second call
+        assert len(client.requests) == 1
+        assert call("/api/state")[1]["explained"] == ["2610.0001"]
+        assert call("/api/explain", {"id": "2610.9999"})[0] == 404    # not in the database
+        code, x = call("/api/explain", {"id": "2610.0002"})           # $0.39 spent of $0.50: allowed
+        assert code == 202 and wait("2610.0002")["status"] == "done"
+        code, x = call("/api/explain", {"id": "2610.0003"})           # $0.77 spent: over budget
+        assert code == 429 and "budget" in x["error"]
+        assert len(client.requests) == 2
+    finally:
+        httpd.shutdown()
+
+    # a failed call is marked failed (so the page stops waiting) and can be retried
+    monkeypatch.setattr(explain, "fetch_pdf", lambda pid: (_ for _ in ()).throw(ValueError("no PDF")))
+    assert db.claim_explanation(con, "2610.0003")
+    with pytest.raises(ValueError):
+        explain.explain(con, "2610.0003", cfg, LLM(client))
+    assert db.get_explanation(con, "2610.0003")["status"] == "failed"
+    assert db.claim_explanation(con, "2610.0003") and not db.claim_explanation(con, "2610.0003")
+
+    # the public site publishes finished explanations read-only; explained papers survive pruning
+    site.build(con, str(tmp_path / "site"))
+    prefs = json.loads((tmp_path / "site/data/prefs.json").read_text())
+    assert prefs["explained"] == ["2610.0001", "2610.0002"]
+    assert json.loads((tmp_path / "site/data/x/2610.0001.json").read_text())["status"] == "done"
+    assert not (tmp_path / "site/data/x/2610.0003.json").exists()
+    db.prune(con, 1)
+    assert {r[0] for r in con.execute("SELECT id FROM papers")} >= {"2610.0001", "2610.0002"}

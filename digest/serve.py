@@ -6,6 +6,7 @@ SQLite (no rebuild needed after a run), with ratings and bookmarks saved directl
 from __future__ import annotations
 
 import collections
+import datetime as dt
 import gzip
 import hashlib
 import http.server
@@ -89,8 +90,50 @@ def _push_to_zotero(db_path: str, pid: str, cfg: dict) -> None:
         print(f"zotero push failed for {pid}: {e}  (retry: python run.py --zotero-sync)")
 
 
-def make_handler(db_path: str, title: str, cfg: dict | None = None):
+def _explain_in_background(db_path: str, pid: str, cfg: dict, llm) -> None:
+    """Runs in a thread after "Explain this paper"; the paper is already claimed (pending)."""
+    con = db.connect(db_path)
+    try:
+        from . import explain
+
+        x = explain.explain(con, pid, cfg, llm)
+        print(f"explained {pid} (${x['cost']:.3f})")
+    except Exception as e:  # noqa: BLE001  (explain() already marked it failed)
+        print(f"explaining {pid} failed: {e}")
+    finally:
+        con.close()
+
+
+def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
+    """`llm`: the Claude client for explanations; made on first use from ANTHROPIC_API_KEY."""
     cfg = cfg or {}
+    xcfg = cfg.get("explain", {})
+    can_explain = xcfg.get("enabled", True) and (llm is not None or bool(os.environ.get("ANTHROPIC_API_KEY")))
+    claude = {"llm": llm, "lock": threading.Lock()}
+
+    def request_explanation(con, pid: str) -> tuple[dict, int]:
+        if not can_explain:
+            return {"error": "explanations are off here (explain.enabled, or no ANTHROPIC_API_KEY)"}, 403
+        if not con.execute("SELECT 1 FROM papers WHERE id = ?", (pid,)).fetchone():
+            return {"error": "paper not in the database"}, 404
+        x = db.get_explanation(con, pid)
+        if x and x["status"] in ("done", "pending"):
+            return x, 200
+        budget = xcfg.get("daily_budget_usd", 5)
+        _, spent = db.explain_spent(con, dt.date.today().isoformat())
+        if budget and spent >= budget:
+            return {"error": f"today's explanation budget (${budget}) is used up; try tomorrow"}, 429
+        if db.claim_explanation(con, pid):  # False: someone else's click got there first
+            with claude["lock"]:
+                if claude["llm"] is None:
+                    from .llm import LLM
+
+                    claude["llm"] = LLM()
+            threading.Thread(
+                target=_explain_in_background, args=(db_path, pid, cfg, claude["llm"]), daemon=True
+            ).start()
+        return db.get_explanation(con, pid), 202
+
     min_rating = cfg.get("feedback", {}).get("min_rating", 4)
     cache = _Cache(db_path)
     vectors = None  # embed.Cache, created on first use (numpy/fastembed import is lazy)
@@ -153,10 +196,19 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None):
                 con = db.connect(db_path)
                 try:
                     return self._json(
-                        {"ratings": db.ratings(con), "bookmarks": db.bookmarks(con), "likes": db.likes(con)}
+                        {"ratings": db.ratings(con), "bookmarks": db.bookmarks(con), "likes": db.likes(con),
+                         "explained": db.explained(con), "explain_on": can_explain}
                     )
                 finally:
                     con.close()
+            m = re.fullmatch(r"/data/x/([\w./-]+)\.json", path)
+            if m:  # one paper's explanation; polled while it's being written
+                con = db.connect(db_path)
+                try:
+                    x = db.get_explanation(con, m[1])
+                finally:
+                    con.close()
+                return self._json(x) if x else self._json({"error": "no explanation"}, 404)
             if path in ("/api/taste", "/api/similar"):
                 from urllib.parse import parse_qs, urlparse
 
@@ -203,6 +255,8 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None):
                     raise ValueError("bad id")
                 con = db.connect(db_path)
                 try:
+                    if self.path == "/api/explain":
+                        return self._json(*request_explanation(con, pid))
                     if self.path == "/api/rating":
                         db.set_rating(con, pid, int(body.get("rating", 0)))
                     elif self.path in ("/api/like", "/api/bookmark"):

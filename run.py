@@ -3,7 +3,7 @@
   python run.py                 # full run: fetch → score → enrich → summarize → deliver
   python run.py --dry-run       # no Discord/site, no DB/state update; writes digest.md
   python run.py --max-papers 60 # cap papers scored (cheap test)
-  python run.py --review 2610.31642 [ID ...]  # full Opus review of each PDF → reviews/ (≈ $0.40 each)
+  python run.py --explain 2610.31642 [ID ...]  # Opus reads each PDF, explains its key points (≈ $0.20)
 
 Free modes (no arXiv, no Claude):
   python run.py --site-only [--no-publish]   # rebuild (and publish) the website from the DB
@@ -96,11 +96,11 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--zotero-sync", action="store_true", help="push liked/bookmarked papers to Zotero")
     ap.add_argument("--export-bib", metavar="FILE", help="write BibTeX for liked/bookmarked papers")
     ap.add_argument(
-        "--review",
+        "--explain",
         nargs="+",
         metavar="ID",
-        help="full-paper review of these arXiv ids/links from the PDF (Opus, ≈ $0.40 each); "
-        "writes reviews/<id>.md and logs the cost to reviews/costs.csv",
+        help="explain these arXiv ids/links from the whole PDF (Opus, ≈ $0.20 each); saved in the "
+        "database and shown on the site, cost logged. Re-explains papers already done",
     )
     args = ap.parse_args(argv)
 
@@ -178,22 +178,25 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             )
         llm = LLM()
 
-    if args.review:
-        from digest import review
+    if args.explain:
+        from digest import explain
 
+        con = db.connect(args.db)
         spent, failed = 0.0, 0
-        for raw in args.review:
+        for raw in args.explain:
             try:
-                pid = review.arxiv_id(raw)
-                print(f"reviewing {pid} (downloading PDF, a review takes ~2 min)")
-                path, cost = review.review(pid, cfg, llm)
-                spent += cost
-                print(f"    wrote {path}  (${cost:.3f})")
+                pid = explain.arxiv_id(raw)
+                if not db.claim_explanation(con, pid, force=True):
+                    raise RuntimeError("the site is explaining it right now")
+                print(f"explaining {pid} (downloading the PDF; takes about a minute)")
+                x = explain.explain(con, pid, cfg, llm)
+                spent += x["cost"]
+                print(f"    saved to {args.db}  (${x['cost']:.3f})")
             except Exception as e:  # one bad id shouldn't stop the others
                 failed += 1
-                print(f"    review of {raw} failed: {e}")
-        n, total = review.total_cost()
-        print(f"this run ≈ ${spent:.3f}; all {n} reviews so far ≈ ${total:.2f} (reviews/costs.csv)")
+                print(f"    explaining {raw} failed: {e}")
+        n, total = db.explain_spent(con)
+        print(f"this run ≈ ${spent:.3f}; all {n} explanations so far ≈ ${total:.2f}")
         return 1 if failed else 0
 
     seen = state.load(args.state)

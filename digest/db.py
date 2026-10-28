@@ -42,6 +42,12 @@ CREATE TABLE IF NOT EXISTS meta (
 CREATE TABLE IF NOT EXISTS days (
   date TEXT PRIMARY KEY, total INTEGER, cost REAL, calls INTEGER
 );
+CREATE TABLE IF NOT EXISTS explanations (
+  id TEXT PRIMARY KEY, status TEXT NOT NULL, text TEXT, model TEXT, cost REAL, at TEXT, error TEXT
+);
+CREATE TABLE IF NOT EXISTS explain_costs (
+  at TEXT NOT NULL, id TEXT NOT NULL, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost REAL
+);
 """
 JSON_COLS = (
     "authors",
@@ -260,10 +266,12 @@ def bookmarks(con: sqlite3.Connection) -> list[str]:
 
 def prune(con: sqlite3.Connection, max_papers: int) -> int:
     """Keep at most `max_papers` papers, deleting the oldest first (FIFO by date).
-    Papers you rated, liked or bookmarked are never deleted and don't count toward the limit."""
+    Papers you rated, liked, bookmarked or had explained are never deleted and don't count
+    toward the limit."""
     if not max_papers or max_papers <= 0:
         return 0
-    special = "id IN (SELECT id FROM ratings UNION SELECT id FROM bookmarks UNION SELECT id FROM likes)"
+    special = ("id IN (SELECT id FROM ratings UNION SELECT id FROM bookmarks UNION SELECT id FROM likes"
+               " UNION SELECT id FROM explanations WHERE status = 'done')")
     n = con.execute(f"SELECT COUNT(*) FROM papers WHERE NOT ({special})").fetchone()[0]
     excess = n - max_papers
     if excess <= 0:
@@ -280,3 +288,67 @@ def prune(con: sqlite3.Connection, max_papers: int) -> int:
         )
         bump_papers_rev(con)
     return excess
+
+
+# ── paper explanations (digest/explain.py) ───────────────────────────────
+# One row per paper: status pending → done | failed. explain_costs logs every call's cost, so
+# the total survives re-explaining a paper.
+def _now() -> str:
+    return dt.datetime.now().isoformat(timespec="seconds")
+
+
+def claim_explanation(con: sqlite3.Connection, pid: str, stale_minutes: int = 15, force: bool = False) -> bool:
+    """Mark a paper's explanation as in progress. False if it is already done, or already being
+    written (two clicks at once must not pay twice). A failed one, or one pending for longer
+    than `stale_minutes` (the server stopped mid-way), can be claimed again; `force` also
+    re-explains a done one."""
+    stale = (dt.datetime.now() - dt.timedelta(minutes=stale_minutes)).isoformat(timespec="seconds")
+    with con:
+        cur = con.execute(
+            "INSERT INTO explanations (id, status, at) VALUES (?, 'pending', ?) "
+            "ON CONFLICT(id) DO UPDATE SET status = 'pending', at = excluded.at, error = NULL "
+            "WHERE explanations.status = 'failed' OR ? "
+            "OR (explanations.status = 'pending' AND explanations.at < ?)",
+            (pid, _now(), force, stale),
+        )
+    return cur.rowcount == 1
+
+
+def save_explanation(
+    con: sqlite3.Connection, pid: str, text: str, model: str, input_tokens: int, output_tokens: int, cost: float
+) -> None:
+    now = _now()
+    with con:
+        con.execute(
+            "INSERT OR REPLACE INTO explanations VALUES (?, 'done', ?, ?, ?, ?, NULL)",
+            (pid, text, model, cost, now),
+        )
+        con.execute(
+            "INSERT INTO explain_costs VALUES (?,?,?,?,?,?)",
+            (now, pid, model, input_tokens, output_tokens, cost),
+        )
+
+
+def fail_explanation(con: sqlite3.Connection, pid: str, error: str) -> None:
+    with con:
+        con.execute(
+            "UPDATE explanations SET status = 'failed', error = ?, at = ? WHERE id = ?",
+            (error[:500], _now(), pid),
+        )
+
+
+def get_explanation(con: sqlite3.Connection, pid: str) -> dict | None:
+    r = con.execute("SELECT * FROM explanations WHERE id = ?", (pid,)).fetchone()
+    return dict(r) if r else None
+
+
+def explained(con: sqlite3.Connection) -> list[str]:
+    return [r["id"] for r in con.execute("SELECT id FROM explanations WHERE status = 'done'")]
+
+
+def explain_spent(con: sqlite3.Connection, since: str = "") -> tuple[int, float]:
+    """(number of explanation calls, USD) since a date or time ("" = ever)."""
+    n, usd = con.execute(
+        "SELECT COUNT(*), COALESCE(SUM(cost), 0) FROM explain_costs WHERE at >= ?", (since,)
+    ).fetchone()
+    return n, usd

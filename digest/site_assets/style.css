@@ -118,3 +118,11 @@ code,kbd{background:var(--lobg);border-radius:4px;padding:0 .3rem;font-size:.82r
 
 .ro .bm:not(.on),.ro .lk:not(.on){display:none}.ro .bm,.ro .lk{pointer-events:none}
 .sim ul{margin:.2rem 0 0 1.1rem;padding:0}.sim li{margin:.1rem 0}.act{border:1px solid var(--line);background:var(--surface);color:var(--mute);border-radius:6px;font-size:.75rem;padding:.1rem .45rem;cursor:pointer}.mute{color:var(--mute)}
+/* explanations (📖): the paper's key points, rendered from Markdown */
+.xp{margin:.5rem 0;padding:.2rem .9rem .5rem;border:1px solid var(--line);border-left:3px solid var(--acc);border-radius:0 8px 8px 0;background:var(--surface);max-width:52rem;font-size:.88rem;line-height:1.5}
+.xp h4{margin:.8rem 0 .25rem;font-size:.74rem;letter-spacing:.06em;text-transform:uppercase;color:var(--acc)}
+.xp p{margin:.3rem 0}.xp ul{margin:.25rem 0;padding-left:1.2rem}.xp li{margin:.15rem 0}
+.xp code{font-size:.85em;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 .25rem}
+.xp table{border-collapse:collapse;margin:.4rem 0;font-size:.82rem;display:block;overflow-x:auto}
+.xp th,.xp td{border:1px solid var(--line);padding:.2rem .5rem;text-align:left;vertical-align:top}.xp th{background:var(--bg)}
+.act.on{color:var(--acc);border-color:var(--acc)}.act:disabled{opacity:.6;cursor:wait}

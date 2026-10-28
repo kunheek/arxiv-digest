@@ -135,9 +135,16 @@ limits:
 models:
   scorer: claude-haiku-5-5      # cheap, scores every abstract
   summarizer: claude-sonnet-5-5 # summarizes the shortlist
-  reviewer: claude-opus-5-5     # run.py --review ID: full review from the PDF (≈ $0.40/paper)
-  review_effort: high           # low | medium | high | xhigh | max
   score_batch_size: 20          # abstracts per scoring call
+
+explain:
+  # "Explain this paper" on the local site (run.py --serve), or run.py --explain ID: Opus reads
+  # the whole PDF and writes down the paper's key information (≈ $0.20 and ~1 min per paper).
+  # Saved in the database and shown on both sites; costs are logged in table explain_costs.
+  enabled: true            # false hides the button and refuses requests on the local site
+  model: claude-opus-5-5
+  effort: high             # low | medium | high | xhigh | max
+  daily_budget_usd: 5      # the local site refuses new requests once today's cost reaches this; 0 = no cap
 
 feedback:
   # Papers you like, bookmark, or rate >= min_rating, on the local site (run.py --serve) are fed back into

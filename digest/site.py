@@ -4,6 +4,7 @@ Layout (scales to tens of thousands of papers):
   index.html, app.js, style.css  – tiny single-page app, hash routing
   data/index.json                – one compact row per paper (search + day lists)
   data/d/YYYY-MM-DD.json         – full details, one shard per day, loaded on demand
+  data/x/<id>.json               – a paper's explanation (digest/explain.py), if it has one
 """
 
 from __future__ import annotations
@@ -136,12 +137,16 @@ def build(
     _dump(os.path.join(out, "data", "index.json"), index_payload(papers, days))
     # Read-only mirror of the preferences you set on the local site (ids on this site only).
     ids = {p["id"] for p in papers}
+    explained = sorted(set(db.explained(con)) & ids)
+    for pid in explained:  # read-only here: requesting a new one needs the local server
+        _dump(os.path.join(out, "data", "x", f"{pid}.json"), db.get_explanation(con, pid))
     _dump(
         os.path.join(out, "data", "prefs.json"),
         {
             "ratings": {i: r for i, r in rated.items() if i in ids},
             "bookmarks": sorted(saved & ids),
             "likes": sorted(liked & ids),
+            "explained": explained,
         },
     )
     return len(papers)
