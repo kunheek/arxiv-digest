@@ -481,6 +481,26 @@ def test_local_server_serves_everything_and_saves_state(tmp_path):
         assert st == {"ratings": {"2610.0002": 5}, "bookmarks": ["2610.0001"], "likes": ["2610.0002"]}
         assert b"app.js" in urllib.request.urlopen(base + "/").read()
         assert urllib.request.urlopen(base + "/app.js").status == 200
+        # the index is revalidated, not re-sent: 304 until papers change (picks don't count)
+        import urllib.error
+        etag = urllib.request.urlopen(base + "/data/index.json").headers["ETag"]
+        again = lambda: urllib.request.urlopen(urllib.request.Request(
+            base + "/data/index.json", headers={"If-None-Match": etag}))
+        with pytest.raises(urllib.error.HTTPError) as e:
+            again()
+        assert e.value.code == 304
+        con = db.connect(path)
+        db.upsert(con, [_paper("2610.0003")], "2026-10-17", {"total": 1, "cost": 0, "calls": 0})
+        con.close()
+        r = again()
+        assert r.status == 200 and r.headers["ETag"] != etag
+        day = urllib.request.urlopen(urllib.request.Request(base + "/data/d/2026-10-16.json",
+                                                            headers={"Accept-Encoding": "gzip"}))
+        assert set(json.loads(gzip.decompress(day.read()))) == {"2610.0001", "2610.0002"}
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(urllib.request.Request(base + "/data/d/2026-10-16.json",
+                                                          headers={"If-None-Match": day.headers["ETag"]}))
+        assert e.value.code == 304
     finally:
         httpd.shutdown()
 
@@ -771,3 +791,22 @@ def test_zotero_disabled_in_config_never_pushes(tmp_path, monkeypatch):
     cfg = tmp_path / "lab.yaml"
     cfg.write_text("zotero: {enabled: false}\ndelivery: {}\n")
     assert run.main(["--config", str(cfg), "--zotero-sync", "--db", path]) == 1
+
+
+def test_db_is_wal_and_index_rev_ignores_picks(tmp_path):
+    from digest import db
+    con = db.connect(str(tmp_path / "d.db"))
+    assert con.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    r0 = db.papers_rev(con)
+    db.upsert(con, [_paper("2610.00001"), _paper("2610.00002")], "2026-10-01", {"total": 2, "cost": 0, "calls": 0})
+    r1 = db.papers_rev(con)
+    db.set_rating(con, "2610.00001", 5)
+    db.set_like(con, "2610.00001", True)
+    db.set_bookmark(con, "2610.00002", True)
+    assert r0 != r1 == db.papers_rev(con)                       # picks don't force an index rebuild
+    db.upsert(con, [_paper("2610.00002")], "2026-10-01")         # a rescore of the newest paper
+    r2 = db.papers_rev(con)
+    assert r2 != r1
+    db.upsert(con, [_paper("2610.00003"), _paper("2610.00004")], "2026-10-02")
+    r3 = db.papers_rev(con)
+    assert db.prune(con, 1) == 1 and db.papers_rev(con) != r3   # picks are kept; one of the two others goes

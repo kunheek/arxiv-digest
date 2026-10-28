@@ -5,37 +5,67 @@ SQLite (no rebuild needed after a run), with ratings and bookmarks saved directl
 """
 from __future__ import annotations
 
+import collections
 import gzip
+import hashlib
 import http.server
 import json
 import mimetypes
 import os
 import re
+import sqlite3
 import threading
 
 from . import db, site
 
 
 class _Cache:
-    """Index payload (gzipped) rebuilt only when the database file changes."""
+    """Index payload (gzipped) rebuilt only when papers change (a daily run, a prune), not on
+    every like or rating. Concurrent requests during a rebuild wait for it and share it."""
 
     def __init__(self, path: str):
-        self.path, self.lock, self.mtime, self.gz = path, threading.Lock(), None, b""
+        self.path, self.lock, self.rev, self.gz, self.etag = path, threading.Lock(), None, b"", ""
 
-    def index_gz(self) -> bytes:
+    def index_gz(self) -> tuple[bytes, str]:
+        """(gzipped index, ETag). The ETag lets browsers keep the index until the next run."""
         with self.lock:
-            m = os.stat(self.path).st_mtime_ns
-            if m != self.mtime:
-                con = db.connect(self.path)
-                days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
-                body = json.dumps(
-                    site.index_payload(db.all_papers(con), days),
-                    ensure_ascii=False,
-                    separators=(",", ":"),
-                ).encode()
-                self.gz, self.mtime = gzip.compress(body, 5), m
+            con = db.connect(self.path)
+            try:
+                rev = db.papers_rev(con)
+                if rev != self.rev:
+                    days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
+                    body = json.dumps(
+                        site.index_payload(db.all_papers(con, cols=db.INDEX_COLS), days),
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ).encode()
+                    self.gz, self.rev = gzip.compress(body, 5), rev
+                    self.etag = '"%s"' % hashlib.sha1(self.gz).hexdigest()[:16]
+            finally:
                 con.close()
-            return self.gz
+            return self.gz, self.etag
+
+
+class _Lru:
+    """A small thread-safe LRU of built responses. Keys include the papers revision, so a run
+    makes old entries unreachable and they age out."""
+
+    def __init__(self, size: int):
+        self.size, self.lock, self.d = size, threading.Lock(), collections.OrderedDict()
+
+    def get(self, k):
+        with self.lock:
+            if k in self.d:
+                self.d.move_to_end(k)
+            return self.d.get(k)
+
+    def put(self, k, v):
+        with self.lock:
+            self.d[k] = v
+            self.d.move_to_end(k)
+            while len(self.d) > self.size:
+                self.d.popitem(last=False)
+        return v
 
 
 def _brief(con, pid: str) -> dict:
@@ -64,16 +94,26 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None):
     min_rating = cfg.get("feedback", {}).get("min_rating", 4)
     cache = _Cache(db_path)
     vectors = None  # embed.Cache, created on first use (numpy/fastembed import is lazy)
+    taste = {"lock": threading.Lock(), "key": None, "body": b""}
+    days = _Lru(64)  # built day files (~0.5 MB gzipped each), so a popular day is built once
     page = site.page_html(title, local=True).encode()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):  # quiet
             pass
 
-        def _send(self, body: bytes, ctype: str, gz: bool = False, code: int = 200):
+        def _send(self, body: bytes, ctype: str, gz: bool = False, code: int = 200, etag: str = ""):
+            if etag and etag in self.headers.get("If-None-Match", ""):
+                self.send_response(304)  # the browser's copy is current: no body
+                self.send_header("ETag", etag)
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                return
             self.send_response(code)
             self.send_header("Content-Type", ctype)
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-cache")  # cache, but revalidate every time
+            if etag:
+                self.send_header("ETag", etag)
             if gz:
                 self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))
@@ -89,18 +129,26 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None):
             if path in ("/", "/index.html"):
                 return self._send(page, "text/html; charset=utf-8")
             if path == "/data/index.json":
-                return self._send(cache.index_gz(), "application/json", gz=True)
+                body, etag = cache.index_gz()
+                return self._send(body, "application/json", gz=True, etag=etag)
             m = re.fullmatch(r"/data/d/(\d{4}-\d{2}-\d{2})\.json", path)
             if m:
                 con = db.connect(db_path)
                 try:
-                    shard = site.shards_for(db.all_papers(con, m[1])).get(m[1], {})
+                    # a day only changes with a run, so the papers revision tags it too
+                    etag = '"%s-%s-%s"' % (m[1], *db.papers_rev(con))
+                    if etag in self.headers.get("If-None-Match", ""):
+                        return self._send(b"", "application/json", etag=etag)
+                    gz = days.get(etag)
+                    if gz is None:
+                        shard = site.shards_for(db.all_papers(con, m[1])).get(m[1], {})
+                        body = json.dumps(shard, ensure_ascii=False, separators=(",", ":")).encode()
+                        gz = days.put(etag, gzip.compress(body, 5))
                 finally:
                     con.close()
-                return self._send(
-                    json.dumps(shard, ensure_ascii=False, separators=(",", ":")).encode(),
-                    "application/json",
-                )
+                if "gzip" in self.headers.get("Accept-Encoding", ""):  # every browser
+                    return self._send(gz, "application/json", gz=True, etag=etag)
+                return self._send(gzip.decompress(gz), "application/json", etag=etag)
             if path == "/api/state":
                 con = db.connect(db_path)
                 try:
@@ -121,7 +169,15 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None):
                     try:
                         ix = vectors.get(con)
                         if path == "/api/taste":
-                            return self._json(embed.taste_scores(con, ix, min_rating=min_rating))
+                            # everyone shares the picks, so one result serves every visitor
+                            # until a pick or a new day's vectors change it
+                            key = (vectors.stamp, embed.reference_ids(con, min_rating))
+                            with taste["lock"]:
+                                if taste["key"] != key:
+                                    scores = embed.taste_scores(con, ix, min_rating=min_rating)
+                                    taste.update(key=key, body=json.dumps(scores).encode())
+                                body = taste["body"]
+                            return self._send(body, "application/json")
                         pid = q.get("id", [""])[0]
                         return self._json(
                             [{"id": i, "sim": s, **_brief(con, i)} for i, s in embed.similar(con, pid, index=ix)]
@@ -163,15 +219,28 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None):
                 self._json({"ok": True})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 self._json({"error": str(e)}, 400)
+            except sqlite3.OperationalError as e:  # still locked after db.connect's 30 s wait
+                self._json({"error": f"database busy, try again ({e})"}, 503)
 
     return Handler
+
+
+class _Server(http.server.ThreadingHTTPServer):
+    """One thread per request. The default listen backlog (5) drops connections when a lab's
+    worth of people open the page at once."""
+
+    request_queue_size = 128
 
 
 def serve(
     db_path: str, host: str = "127.0.0.1", port: int = 8000, title: str = "arXiv digest", cfg: dict | None = None
 ) -> None:
-    db.connect(db_path).close()  # make sure the schema exists
-    httpd = http.server.ThreadingHTTPServer((host, port), make_handler(db_path, title, cfg))
+    # numpy (taste, similar papers) would otherwise spread each request over every core, which
+    # on a shared server competes with everyone's jobs; set before numpy is first imported
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ.setdefault(var, "4")
+    db.connect(db_path).close()  # make sure the schema exists (and switch it to WAL)
+    httpd = _Server((host, port), make_handler(db_path, title, cfg))
     print(f"serving all papers from {db_path} at http://{host}:{port}/  (Ctrl-C to stop)")
     try:
         httpd.serve_forever()

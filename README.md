@@ -106,6 +106,10 @@ scripts/install.sh --serve --config config.kcvl.yaml --host 0.0.0.0   # http://<
 - The site has **no login**: anyone who can reach the port can read it and change ratings, and
   everyone's likes and ratings train the scorer (shared taste). Keep it on the lab network or
   behind a VPN / SSH tunnel.
+- **Many people at once:** the server answers each request in its own thread, and the database
+  runs in SQLite's WAL mode, so clicks never wait on readers or on a daily run. Browsers keep the
+  paper index and only re-download it after a run (ETag). Picks are shared: one rating per paper,
+  the last click wins.
 - Leave your personal `ZOTERO_API_KEY` out of that machine's `.env`, or the lab's likes land in
   your library; `config.kcvl.yaml` turns Zotero and Discord off (`zotero.enabled`, `delivery.discord`).
 - Use a separate clone on a separate machine (or user account): the database, `state/seen.json`

@@ -55,8 +55,17 @@ JSON_COLS = (
 
 def connect(path: str = DB_PATH) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    con = sqlite3.connect(path)
+    # wait up to 30 s for another writer (the daily run, another reader's click) instead of
+    # failing with "database is locked" after the default 5 s
+    con = sqlite3.connect(path, timeout=30)
     con.row_factory = sqlite3.Row
+    # WAL: readers (the site) never block the writer and vice versa. Stored in the file, so
+    # this is a no-op after the first time; skipped if another connection holds a lock.
+    try:
+        if con.execute("PRAGMA journal_mode").fetchone()[0] != "wal":
+            con.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError:
+        pass
     con.executescript(SCHEMA)
     have = {r["name"] for r in con.execute("PRAGMA table_info(papers)")}
     for col, ddl in (
@@ -90,11 +99,35 @@ def upsert(
                 "INSERT OR REPLACE INTO days VALUES (?,?,?,?)",
                 (date, stats.get("total"), stats.get("cost"), stats.get("calls")),
             )
+        bump_papers_rev(con)
 
 
-def all_papers(con: sqlite3.Connection, date: str | None = None) -> list[dict]:
+def bump_papers_rev(con: sqlite3.Connection) -> None:
+    """Mark papers/days as changed, so the local server rebuilds its index (likes and ratings
+    don't touch it). Call inside the writing transaction."""
+    con.execute(
+        "INSERT INTO meta VALUES ('papers_rev', '1') "
+        "ON CONFLICT(k) DO UPDATE SET v = CAST(v AS INTEGER) + 1"
+    )
+
+
+def papers_rev(con: sqlite3.Connection) -> tuple:
+    """Changes whenever papers or days change (O(1), unlike counting rows)."""
+    r = con.execute("SELECT v FROM meta WHERE k = 'papers_rev'").fetchone()
+    return (r[0] if r else None, con.execute("SELECT MAX(rowid) FROM papers").fetchone()[0])
+
+
+INDEX_COLS = (
+    "id, date, title, final, interest, tags, authors, author_hits, inst_hits, code_url, "
+    "categories, quality, impact"
+)
+
+
+def all_papers(con: sqlite3.Connection, date: str | None = None, cols: str = "*") -> list[dict]:
+    """Every paper (or one day's), newest first. `cols` limits the columns read, e.g.
+    INDEX_COLS for the site index, which never needs abstracts or summaries."""
     rows = con.execute(
-        "SELECT * FROM papers"
+        f"SELECT {cols} FROM papers"
         + (" WHERE date = ?" if date else "")
         + " ORDER BY date DESC, final DESC, interest DESC",
         (date,) if date else (),
@@ -103,7 +136,8 @@ def all_papers(con: sqlite3.Connection, date: str | None = None) -> list[dict]:
     for r in rows:
         d = dict(r)
         for c in JSON_COLS:
-            d[c] = json.loads(d[c] or "[]")
+            if c in d:
+                d[c] = json.loads(d[c] or "[]")
         out.append(d)
     return out
 
@@ -244,4 +278,5 @@ def prune(con: sqlite3.Connection, max_papers: int) -> int:
         con.execute(
             "DELETE FROM days WHERE date NOT IN (SELECT DISTINCT date FROM papers)"
         )
+        bump_papers_rev(con)
     return excess
