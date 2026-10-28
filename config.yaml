@@ -119,7 +119,7 @@ models:
   score_batch_size: 20          # abstracts per scoring call
 
 feedback:
-  # Papers you like, or rate >= min_rating, on the local site (run.py --serve) are fed back into
+  # Papers you like, bookmark, or rate >= min_rating, on the local site (run.py --serve) are fed back into
   # the scorer as positive examples. min_rating also sets what counts as a pick for the taste score.
   enabled: true
   min_rating: 4

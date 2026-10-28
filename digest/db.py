@@ -167,13 +167,18 @@ def ratings(con: sqlite3.Connection) -> dict[str, int]:
 def liked_titles(
     con: sqlite3.Connection, min_rating: int = 4, limit: int = 30
 ) -> list[str]:
-    """Titles of papers you rated highly (newest first) → extra positive examples for scoring."""
+    """Titles of papers you liked, bookmarked or rated highly (newest first) → extra positive
+    examples for scoring. A bookmark you also rated below min_rating doesn't count."""
     rows = con.execute(
         "SELECT p.title FROM papers p JOIN ("
-        "  SELECT id, rated_at AS at FROM ratings WHERE rating >= ?"
-        "  UNION SELECT id, liked_at FROM likes"
+        "  SELECT id, MAX(at) AS at FROM ("
+        "    SELECT id, rated_at AS at FROM ratings WHERE rating >= ?"
+        "    UNION ALL SELECT id, liked_at FROM likes"
+        "    UNION ALL SELECT id, saved_at FROM bookmarks"
+        "      WHERE id NOT IN (SELECT id FROM ratings WHERE rating < ?)"
+        "  ) GROUP BY id"
         ") x ON x.id = p.id ORDER BY x.at DESC, p.date DESC LIMIT ?",
-        (min_rating, limit),
+        (min_rating, min_rating, limit),
     )
     return [r["title"] for r in rows]
 

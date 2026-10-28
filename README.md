@@ -97,7 +97,8 @@ service on Linux, launchd agent on macOS); without systemd, use `tmux`.
 ### Ratings and bookmarks
 Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them with 🔖 (`b`).
 Like with ♥ (`l`). Liked, bookmarked and rated papers are protected from FIFO deletion. Search with `is:saved`,
-`is:liked`, `is:rated`, `rating>=4`, or the 🔖 saved checkbox. Likes (and ratings ≥ `feedback.min_rating`) become positive examples for scoring.
+`is:liked`, `is:rated`, `rating>=4`, or the 🔖 saved checkbox. Likes, bookmarks and ratings ≥ `feedback.min_rating` become positive examples for scoring
+(a bookmark you rated lower doesn't).
 
 - **Only the local site can change them**; they're saved straight into the database.
 - **GitHub Pages is read-only.** Each publish includes `data/prefs.json` (your ratings and
@@ -105,7 +106,7 @@ Like with ♥ (`l`). Liked, bookmarked and rated papers are protected from FIFO 
   included even beyond `site_max_papers`. To push new picks right away instead of waiting for the
   next run: `.venv/bin/python run.py --site-only`.
 
-Papers rated ≥ `feedback.min_rating` become positive examples in later scoring runs.
+Liked, bookmarked and highly rated papers become positive examples in later scoring runs.
 
 ### Embeddings (local only)
 Every paper is embedded on your CPU with `fastembed` (`BAAI/bge-small-en-v1.5`, 384-d, stored as

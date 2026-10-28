@@ -207,7 +207,7 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             con, fb.get("min_rating", 4), fb.get("max_examples", 30)
         )
         if liked:
-            print(f"    using {len(liked)} papers you rated highly as examples")
+            print(f"    using {len(liked)} papers you liked, bookmarked or rated highly as examples")
 
     print("2/5 scoring abstracts")
     score_all(papers, cfg, llm, liked)

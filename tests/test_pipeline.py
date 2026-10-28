@@ -530,6 +530,20 @@ def test_likes_protected_and_used_as_examples(tmp_path):
     assert db.likes(con) == []
 
 
+def test_bookmarks_used_as_examples(tmp_path):
+    from digest import db
+    con = db.connect(str(tmp_path / "d.db"))
+    db.upsert(con, [_paper("2610.00001"), _paper("2610.00002")], "2026-10-01",
+              {"total": 2, "cost": 0, "calls": 0})
+    db.set_bookmark(con, "2610.00001", True)
+    db.set_like(con, "2610.00001", True)
+    assert len(db.liked_titles(con)) == 1  # bookmarked + liked counts once
+    db.set_bookmark(con, "2610.00002", True)
+    assert len(db.liked_titles(con)) == 2
+    db.set_rating(con, "2610.00002", 2)  # bookmarked but rated low → not an example
+    assert len(db.liked_titles(con)) == 1
+
+
 def test_embeddings_taste_and_similar(tmp_path, monkeypatch):
     import numpy as np
     from digest import db, embed
