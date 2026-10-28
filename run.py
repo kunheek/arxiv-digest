@@ -3,6 +3,7 @@
   python run.py                 # full run: fetch → score → enrich → summarize → deliver
   python run.py --dry-run       # no Discord/site, no DB/state update; writes digest.md
   python run.py --max-papers 60 # cap papers scored (cheap test)
+  python run.py --review 2610.31642 [ID ...]  # full Opus review of each PDF → reviews/ (≈ $0.40 each)
 
 Free modes (no arXiv, no Claude):
   python run.py --site-only [--no-publish]   # rebuild (and publish) the website from the DB
@@ -94,6 +95,13 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--eval-taste", action="store_true", help="compare Sonnet's score with the embedding taste score")
     ap.add_argument("--zotero-sync", action="store_true", help="push liked/bookmarked papers to Zotero")
     ap.add_argument("--export-bib", metavar="FILE", help="write BibTeX for liked/bookmarked papers")
+    ap.add_argument(
+        "--review",
+        nargs="+",
+        metavar="ID",
+        help="full-paper review of these arXiv ids/links from the PDF (Opus, ≈ $0.40 each); "
+        "writes reviews/<id>.md and logs the cost to reviews/costs.csv",
+    )
     args = ap.parse_args(argv)
 
     load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
@@ -169,6 +177,24 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
                 "WARNING: ANTHROPIC_API_KEY doesn't start with 'sk-ant-'. Check you pasted only the key."
             )
         llm = LLM()
+
+    if args.review:
+        from digest import review
+
+        spent, failed = 0.0, 0
+        for raw in args.review:
+            try:
+                pid = review.arxiv_id(raw)
+                print(f"reviewing {pid} (downloading PDF, a review takes ~2 min)")
+                path, cost = review.review(pid, cfg, llm)
+                spent += cost
+                print(f"    wrote {path}  (${cost:.3f})")
+            except Exception as e:  # one bad id shouldn't stop the others
+                failed += 1
+                print(f"    review of {raw} failed: {e}")
+        n, total = review.total_cost()
+        print(f"this run ≈ ${spent:.3f}; all {n} reviews so far ≈ ${total:.2f} (reviews/costs.csv)")
+        return 1 if failed else 0
 
     seen = state.load(args.state)
     if args.rescore:

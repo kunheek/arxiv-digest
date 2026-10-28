@@ -11,6 +11,9 @@ google-creds.json
 # local run logs
 logs/
 
+# full-paper reviews and their cost log (run.py --review)
+reviews/
+
 # local database and generated site
 data/
 site/

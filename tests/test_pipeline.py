@@ -1,5 +1,6 @@
 """Offline end-to-end test: fake RSS, fake arXiv HTML, fake Claude. Run: python -m pytest -q"""
 
+import contextlib
 import json
 import os
 import re
@@ -810,3 +811,50 @@ def test_db_is_wal_and_index_rev_ignores_picks(tmp_path):
     db.upsert(con, [_paper("2610.00003"), _paper("2610.00004")], "2026-10-02")
     r3 = db.papers_rev(con)
     assert db.prune(con, 1) == 1 and db.papers_rev(con) != r3   # picks are kept; one of the two others goes
+
+
+class FakeStreamClient:
+    """Mimics anthropic.Anthropic().beta.messages.stream(...) for the PDF review."""
+
+    def __init__(self):
+        self.beta = types.SimpleNamespace(messages=self)
+        self.requests = []
+
+    @contextlib.contextmanager
+    def stream(self, **kw):
+        self.requests.append(kw)
+        msg = types.SimpleNamespace(
+            model=kw["model"],
+            stop_reason="end_turn",
+            usage=types.SimpleNamespace(input_tokens=28781, output_tokens=13527),
+            content=[
+                types.SimpleNamespace(type="thinking", thinking=""),
+                types.SimpleNamespace(type="text", text="# Review\n\n## 1. Summary\nGood paper."),
+            ],
+        )
+        yield types.SimpleNamespace(get_final_message=lambda: msg)
+
+
+def test_review_mode_writes_review_and_logs_cost(tmp_path, monkeypatch):
+    import csv
+    from digest import review as review_mod
+
+    pdfs = []
+    monkeypatch.setattr(review_mod, "fetch_pdf", lambda pid: pdfs.append(pid) or b"%PDF-1.7 fake")
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    monkeypatch.chdir(tmp_path)
+    client = FakeStreamClient()
+    args = ["--config", os.path.join(root, "config.yaml"), "--review",
+            "https://arxiv.org/abs/2610.31642v2", "not-an-id", "arXiv:2610.00001"]
+    assert run.main(args, llm=LLM(client)) == 1  # the bad id fails, the other two still run
+
+    assert pdfs == ["2610.31642v2", "2610.00001"]
+    req = client.requests[0]
+    assert req["model"] == "claude-opus-5-5" and req["fallbacks"] == "default"
+    assert req["messages"][0]["content"][0]["type"] == "document"
+    text = (tmp_path / "reviews/2610.31642v2.md").read_text()
+    assert "## 1. Summary" in text and "$0.386" in text
+    rows = list(csv.DictReader(open(tmp_path / "reviews/costs.csv")))
+    assert [r["id"] for r in rows] == ["2610.31642v2", "2610.00001"]
+    assert float(rows[0]["cost_usd"]) == pytest.approx((28781 * 4 + 13527 * 20) / 1e6, abs=1e-4)
+    assert review_mod.total_cost("reviews") == (2, pytest.approx(2 * 0.3857, abs=1e-3))

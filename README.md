@@ -63,6 +63,7 @@ scripts/install.sh --serve                              # Mon–Fri 14:03 and 16
 | Logs | `tail -f logs/$(date +%Y-%m).log` |
 | Rebuild + publish site (free) | `.venv/bin/python run.py --site-only` |
 | Build only, preview locally | `run.py --site-only --no-publish && cd site && python3 -m http.server` |
+| Full review of a paper (≈ $0.40) | `.venv/bin/python run.py --review 2610.31642` |
 | Tests | `.venv/bin/pip install pytest && .venv/bin/python -m pytest -q` |
 
 ## Website
@@ -167,6 +168,20 @@ with acronyms such as `{NeRF}` and `{4D}` braced so styles don't lowercase them.
 later published at a venue, replace the entry with the venue's. `.venv/bin/python run.py --export-bib refs.bib` writes
 all liked/bookmarked papers. For a `.bib` that stays in sync with your library, use Zotero's
 Better BibTeX plugin on the `arxiv-digest` collection.
+
+### Full-paper reviews
+For a paper worth a closer look, `.venv/bin/python run.py --review 2610.31642` has Opus 5.5 read
+the whole PDF, figures included, and write a peer review. The review covers the paper's summary,
+strengths, weaknesses, a check of the key derivations, the experiments, questions for the authors,
+and a 1–10 verdict. Pass several ids or arXiv links at once. Only the papers you name are reviewed;
+the daily digest never starts one.
+
+- Each review is written to `reviews/<id>.md`. Its cost is appended to `reviews/costs.csv`
+  (date, id, model, tokens, USD), and the run prints the total so far.
+- Expect about **$0.40 and 2 minutes** for a 10-page paper, and more for long appendices.
+  `models.reviewer` and `models.review_effort` in `config.yaml` set the model and depth.
+  `claude-sonnet-5-5` costs about half as much but writes shallower critiques.
+- If Opus declines a paper on policy grounds, the API retries it on its default fallback model.
 
 ## Tuning (`config.yaml`)
 - **`interest_profile`** matters most. Be specific about what's core, adjacent and unwanted.

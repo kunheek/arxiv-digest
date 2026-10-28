@@ -146,6 +146,8 @@ limits:
 models:
   scorer: claude-haiku-5-5
   summarizer: claude-sonnet-5-5
+  reviewer: claude-opus-5-5     # run.py --review ID: full review from the PDF (≈ $0.40/paper)
+  review_effort: high           # low | medium | high | xhigh | max
   score_batch_size: 20
 
 feedback:

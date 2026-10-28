@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import time
 
@@ -68,14 +69,54 @@ class LLM:
                 print(f"    bad reply ({e}); retrying")
         raise RuntimeError(f"Claude call failed after retries: {last_err}")
 
-    def _track(self, model, usage):
+    def ask_document(
+        self, model: str, system: str, pdf: bytes, prompt: str,
+        max_tokens: int = 32000, effort: str = "high",
+    ) -> tuple[str, float, object]:
+        """Send a whole PDF (each page as text + image) and return (reply, cost, usage).
+
+        Streams, because a long review with thinking can outlast a plain request's timeout.
+        If the model declines on policy grounds, the API retries on its default fallback model.
+        """
+        content = [
+            {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": "application/pdf",
+                    "data": base64.standard_b64encode(pdf).decode(),
+                },
+            },
+            {"type": "text", "text": prompt},
+        ]
+        with self.client.beta.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": content}],
+            output_config={"effort": effort},
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+        ) as stream:
+            resp = stream.get_final_message()
+        cost = self._track(resp.model or model, resp.usage)
+        if resp.stop_reason == "max_tokens":
+            raise RuntimeError("reply was cut off (max_tokens too small)")
+        if resp.stop_reason == "refusal":
+            raise RuntimeError("model declined this request")
+        text = "".join(b.text for b in resp.content if b.type == "text")
+        return text, cost, resp.usage
+
+    def _track(self, model, usage) -> float:
         pin, pout = PRICES.get(model, (0, 0))
         cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
         cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
-        self.cost += (
+        cost = (
             usage.input_tokens * pin
             + cache_write * pin * 1.25
             + cache_read * pin * 0.1
             + usage.output_tokens * pout
         ) / 1e6
+        self.cost += cost
         self.calls += 1
+        return cost
