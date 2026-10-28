@@ -10,7 +10,7 @@ categories:
   - cs.LG    # Machine Learning (generative models, world models)
   - cs.RO    # Robotics (physical AI, embodied AI, grasping)
   - cs.AI
-  - stats.ML # Machine Learning (statistics)
+  - stat.ML # Machine Learning (statistics)
 
 # "new" = first appearance, "cross" = cross-listed into one of your categories.
 announce_types: [new, cross]

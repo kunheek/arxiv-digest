@@ -33,7 +33,6 @@ interest_profile: |
   - General-purpose building blocks (optimizers, normalization, architectures, attention)
   - Methods that transfer across computer vision, graphics and deep learning
   - Theory that explains widely used practice
-  These count even when they come from NLP.
   
   Not interested (exclude unless the paper clearly connects to a core interest):
   - Medical imaging
@@ -58,7 +57,6 @@ seed_papers:
   - "RigGS: Rigging of 3D Gaussians for Modeling Articulated Objects in Videos"
   - "Template-free Articulated Gaussian Splatting for Real-time Reposable Dynamic View Synthesis"
   - "3DGS-Avatar: Animatable Avatars via Deformable 3D Gaussian Splatting"
-  - "Watch It Move: Unsupervised Discovery of 3D Joints for Re-Posing of Articulated Objects"
   - "HumanNeRF: Free-viewpoint Rendering of Moving People from Monocular Video"
   # world models
   - "World Motion Models: Flexible Sequence Modeling of SE(3) Trajectories"
