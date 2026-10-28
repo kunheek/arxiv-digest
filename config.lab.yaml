@@ -1,0 +1,176 @@
+# ─────────────────────────────────────────────────────────────
+#  arXiv daily digest — KAIST Computer Vision and Learning lab (KCVL, Prof. Tae-Kyun Kim)
+#  Lab-wide profile, served from the lab machine (run.py --serve), never published to GitHub Pages.
+#  Use with:  run.py --config config.lab.yaml   (run_daily.sh passes extra arguments through)
+# ─────────────────────────────────────────────────────────────
+
+categories:
+  - cs.CV    # Computer Vision and Pattern Recognition
+  - cs.GR    # Graphics (avatars, physics-based animation, Gaussian splatting)
+  - cs.LG    # Machine Learning (generative models, world models)
+  - cs.RO    # Robotics (physical AI, embodied AI, grasping)
+
+# "new" = first appearance, "cross" = cross-listed into one of your categories.
+announce_types: [new, cross]
+
+# Written from the lab's research statement, open-position scope and 2023–2026 publications
+# (https://sites.google.com/view/tkkim), plus current work not on the site yet (video diffusion
+# transformers, transformer architectures). The lab is broad, so the profile is broad too.
+interest_profile: |
+  This is a lab-wide digest for a computer vision and machine learning lab working on
+  machine (deep) learning for 3D computer vision, generative AI, AI with physics,
+  man-machine interfaces and robotics. Several students read it, so a paper only has to
+  matter to one of the topics below.
+
+  Core interests (highest priority):
+  - 3D hand reconstruction and pose: single and interacting two hands, hand-object
+    interaction and grasping, hand texture and shape, egocentric hand tracking
+  - 3D human body: reconstruction from images or occlusion, animatable avatars,
+    egocentric and whole-body motion, motion diffusion and motion generation,
+    physics-based character control and human-object interaction
+  - Physical AI: physics-aware reconstruction and simulation (e.g., MPM, deformable objects),
+    physics-aware video and 3D generation, differentiable physics
+  - 3D/4D reconstruction: 3D/2D Gaussian splatting, neural implicit surfaces, dynamic and
+    4D scenes, sparse-view surface reconstruction, 2D-3D inpainting and editing
+  - Generative models: diffusion, flow matching, diffusion transformers (DiTs), for images,
+    video, 3D and motion; video generation with 3D consistency
+  - Video diffusion transformers: architecture, training, long and autoregressive video,
+    camera and motion control, and efficient inference (caching, distillation, few-step
+    sampling, quantization, sparse attention)
+  - Transformer architecture research: vision transformers (ViT), state space models (SSMs,
+    e.g. Mamba), linear and sparse attention, positional encodings, and other efficient or
+    alternative sequence models
+  - World models for simulation, planning and reasoning
+  - 6D object pose estimation (category-level, model-free, one-shot)
+
+  Secondary interests:
+  - Multimodal foundation models and their use in robotics, embodied AI and AI4Science
+  - 3D object detection (incl. semi-supervised), depth estimation, domain adaptation
+  - Action recognition from skeletons, trajectory prediction
+  - Image restoration, low-light enhancement, super-resolution, text-guided image editing
+  - Face analysis, person re-identification
+  - Interpretable machine learning for science (e.g., protein structure and function)
+
+  Important beyond these topics (read by everyone in the lab):
+  - General-purpose building blocks (architectures, attention, optimizers, training recipes)
+  - Methods that transfer across computer vision, graphics, robotics and deep learning
+  - Theory that explains widely used practice
+  These count even when they come from NLP.
+
+  Not interested (exclude unless the paper clearly connects to an interest above):
+  - Remote sensing and satellite imagery
+  - Adversarial robustness
+  - Federated learning
+
+# The lab's own recent papers: "exactly our taste". Titles as listed on the lab's publications page.
+seed_papers:
+  # physical AI and physics-based reconstruction
+  - "3DPhysVideo: Consistency-Guided Flow SDE for Video Generation via 3D Scene Reconstruction and Physical Simulation"
+  - "PhysHanDI: Physics-Based Reconstruction of Hand-Deformable Object Interactions"
+  - "MPMAvatar: Learning 3D Gaussian Avatars with Accurate and Robust Physics-Based Dynamics"
+  # 3D/4D reconstruction and Gaussian splatting
+  - "DySurface: Consistent 4D Surface Reconstruction via Bridging Explicit Gaussians and Implicit Functions"
+  - "Sparse-GS2Mesh: 3D Gaussian Splatting Guided by Novel Stereo Views and 2DGS for Sparse View Surface Reconstruction"
+  - "CoIn: Comprehensive 2D-3D Inpainting with Gaussian Splatting Guidance"
+  # hands and hand-object interaction
+  - "SRHand: Super-Resolving Hand Images and 3D Shapes via View/Pose-aware Neural Image Representations and Explicit Meshes"
+  - "Dense Hand-Object(HO) GraspNet with Full Grasping Taxonomy and Dynamics"
+  - "InterHandGen: Two-Hand Interaction Generation via Cascaded Reverse Diffusion"
+  - "BiTT: Bi-directional Texture Reconstruction of Interacting Two Hands from a Single Image"
+  - "FourierHandFlow: Neural 4D Hand Representation Using Fourier Query Flow"
+  - "Im2Hands: Learning Attentive Implicit Representation of Interacting Two-Hand Shapes"
+  # human body and motion
+  - "ETA-Motion: Efficient Topology-Agnostic Motion Diffusion via Sparse Joint Learning"
+  - "Dynamic Full-body Motion Agent with Object Interaction via Blending Pre-trained Modular Controllers"
+  - "Egocentric Whole-Body Motion Diffusion with Exemplar-Based Identity Conditioning"
+  - "Multi-hypotheses Conditioned Point Cloud Diffusion for 3D Human Reconstruction from Occluded Images"
+  - "MAPConNet: Self-supervised 3D Pose Transfer with Mesh and Point Contrastive Learning"
+  # 6D pose
+  - "Joint Learning of Pose Regression and Denoising Diffusion with Score Scaling Sampling for Category-level 6D Pose Estimation"
+  # image generation and editing
+  - "Arbitrary-Scale Image Generation and Upsampling using Latent Diffusion Model and Implicit Neural Decoder"
+
+# Field-wide landmarks: teach the IMPACT score what "everyone in the lab should read this" means.
+broad_examples:
+  - "Attention Is All You Need"
+  - "Deep Residual Learning for Image Recognition"
+  - "Denoising Diffusion Probabilistic Models"
+  - "Flow Matching for Generative Modeling"
+  - "Scalable Diffusion Models with Transformers"
+  - "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale"
+  - "Mamba: Linear-Time Sequence Modeling with Selective State Spaces"
+  - "Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention"
+  - "NeRF: Representing Scenes as Neural Radiance Fields for View Synthesis"
+  - "3D Gaussian Splatting for Real-Time Radiance Field Rendering"
+  - "SMPL: A Skinned Multi-Person Linear Model"
+  - "Segment Anything"
+  - "DINOv2: Learning Robust Visual Features without Supervision"
+  - "Learning Transferable Visual Models From Natural Language Supervision"
+
+# PI and frequent collaborators, as arXiv lists them (accents are ignored when matching).
+# Students are left out on purpose: common names such as "Minje Kim" or "Donghwan Kim" would
+# match unrelated authors every day and hand out the author bonus.
+watch_authors:
+  - Tae-Kyun Kim
+  - Minhyuk Sung
+  - Bjorn Stenger
+  - Binod Bhattarai
+
+# Institutions / labs (matched case-insensitively against affiliations from the arXiv HTML).
+watch_institutions:
+  - "KAIST|Korea Advanced Institute of Science and Technology"
+  - "Imperial College London|Imperial College"
+  - "Max Planck"
+  - "ETH Zurich|ETH Zürich"
+  - "Meta|FAIR|Reality Labs"
+  - "Google DeepMind|Google Research|Google"
+  - NVIDIA
+  - Stanford
+  - "Carnegie Mellon|CMU"
+  - "Seoul National University|SNU"
+
+ranking:
+  author_bonus: 3.0
+  institution_bonus: 1.0   # lower than the personal config: the list is broad and KAIST is common
+  min_interest_for_bonus: 4
+  impact_min: 7
+  impact_weight: 0.9
+  impact_review_n: 20
+  quality_weight: 0.3
+
+limits:
+  enrich_top_n: 50         # broader profile → a few more candidates for the affiliation check
+  summarize_top_k: 20      # more readers → a few more summaries
+  db_min_interest: 0
+  db_max_papers: 300000
+  site_max_papers: 6000    # only used by the static site (off here); the served site shows the whole DB
+  site_min_interest: 2
+  rescue_k: 5
+  rescue_min_interest: 7
+
+models:
+  scorer: claude-haiku-5-5
+  summarizer: claude-sonnet-5-5
+  score_batch_size: 20
+
+feedback:
+  # Ratings, likes and bookmarks on the lab server come from everyone using it, so this
+  # learns the lab's shared taste.
+  enabled: true
+  min_rating: 4
+  max_examples: 40
+
+zotero:
+  # Only active if ZOTERO_API_KEY is in the .env next to this file. Leave it out on the lab
+  # machine unless the lab has a shared Zotero group, or everyone's likes land in one library.
+  collection: arxiv-digest-lab
+  tag: arxiv-digest-lab
+  note: true
+  pdf_link: true
+
+delivery:
+  discord: true              # needs DISCORD_WEBHOOK in .env; without publishing the message has no link
+  site: false                # no static site/: the lab reads the live server (run.py --serve)
+  publish: false             # never push to GitHub Pages
+  publish_branch: gh-pages
+  site_title: KCVL arXiv digest

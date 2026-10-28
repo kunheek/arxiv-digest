@@ -6,6 +6,8 @@
 #   scripts/install_launchd.sh            install / update the daily run
 #   scripts/install_launchd.sh --serve    also keep the local site running on http://127.0.0.1:8000
 #   scripts/install_launchd.sh --remove   uninstall both
+# Options: --config FILE (use another config, e.g. config.lab.yaml), and with --serve
+# --host ADDR / --port N (--host 0.0.0.0 makes the site reachable from other machines).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,6 +15,7 @@ AGENTS="$HOME/Library/LaunchAgents"
 DAILY=com.arxiv-digest.daily
 SERVE=com.arxiv-digest.serve
 DOMAIN="gui/$(id -u)"
+source "$REPO/scripts/installer_args.sh"
 
 # bootout returns before the job is gone, and bootstrapping it again too soon fails with
 # "Bootstrap failed: 5: Input/output error", so wait (up to 10 s) until launchd has let go
@@ -23,8 +26,9 @@ stop() {
 unload() { stop "$1"; rm -f "$AGENTS/$1.plist"; }
 load() { stop "$1"; launchctl bootstrap "$DOMAIN" "$AGENTS/$1.plist"; }
 xml() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+strings() { local a; for a in "$@"; do printf '<string>%s</string>' "$(xml "$a")"; done; }
 
-if [ "${1:-}" = "--remove" ]; then
+if [ $REMOVE = 1 ]; then
   unload "$DAILY"; unload "$SERVE"
   echo "removed the arxiv-digest launchd jobs"
   exit 0
@@ -76,7 +80,7 @@ cat > "$AGENTS/$DAILY.plist" <<EOF
 <dict>
   <key>Label</key><string>$DAILY</string>
   <key>ProgramArguments</key>
-  <array><string>/bin/bash</string><string>$RX/scripts/run_daily.sh</string></array>
+  <array><string>/bin/bash</string><string>$RX/scripts/run_daily.sh</string>$(strings ${DAILY_ARGS[@]+"${DAILY_ARGS[@]}"})</array>
   <key>WorkingDirectory</key><string>$RX</string>
   $env_xml
   <key>StartCalendarInterval</key>
@@ -90,7 +94,7 @@ EOF
 load "$DAILY"
 echo "timezone offset${offsets} → daily run Mon–Fri at:$(printf ' %s:03' $(printf '%s\n' $hours | sort -n)) (= 14:03 and 16:03 KST)"
 
-if [ "${1:-}" = "--serve" ]; then
+if [ $SERVE_SITE = 1 ]; then
   cat > "$AGENTS/$SERVE.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -98,7 +102,7 @@ if [ "${1:-}" = "--serve" ]; then
 <dict>
   <key>Label</key><string>$SERVE</string>
   <key>ProgramArguments</key>
-  <array><string>$PX</string><string>run.py</string><string>--serve</string></array>
+  <array><string>$PX</string>$(strings "${SERVE_ARGS[@]}")</array>
   <key>WorkingDirectory</key><string>$RX</string>
   <key>EnvironmentVariables</key><dict><key>PYTHONUNBUFFERED</key><string>1</string></dict>
   <key>RunAtLoad</key><true/>
@@ -110,13 +114,14 @@ if [ "${1:-}" = "--serve" ]; then
 </plist>
 EOF
   stop "$SERVE"   # free the port if an older copy of this job holds it
-  if lsof -nP -iTCP:8000 -sTCP:LISTEN >/dev/null 2>&1; then
-    echo "WARNING: something else is listening on port 8000 (often a run.py --serve in a terminal):" >&2
-    lsof -nP -iTCP:8000 -sTCP:LISTEN >&2 || true
+  if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "WARNING: something else is listening on port $PORT (often a run.py --serve in a terminal):" >&2
+    lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >&2 || true
     echo "         stop it; until then the site job retries once a minute (see logs/serve.log)." >&2
   fi
   load "$SERVE"
-  echo "local site: http://127.0.0.1:8000 (starts at login, restarts if it crashes)"
+  echo "local site: $(site_url) (starts at login, restarts if it crashes)"
+  open_warning
 fi
 
 echo

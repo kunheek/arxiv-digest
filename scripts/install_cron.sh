@@ -4,14 +4,22 @@
 #
 #   scripts/install_cron.sh            install / update
 #   scripts/install_cron.sh --remove   uninstall
+# Option: --config FILE (use another config, e.g. config.lab.yaml). No --serve: cron can't keep
+# the site running, so start it yourself (tmux + run.py --serve).
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TAG="# arxiv-digest"
+source "$REPO/scripts/installer_args.sh"
+if [ $SERVE_SITE = 1 ]; then
+  echo "ERROR: cron can't keep the site running; leave out --serve and run it yourself:" >&2
+  echo "       tmux new -d -s arxiv-digest '$REPO/.venv/bin/python ${SERVE_ARGS[*]}'" >&2
+  exit 2
+fi
 
 current="$(crontab -l 2>/dev/null | grep -vF "$TAG" || true)"
 
-if [ "${1:-}" = "--remove" ]; then
+if [ $REMOVE = 1 ]; then
   printf '%s\n' "$current" | sed '/./,$!d' | crontab -
   echo "removed arxiv-digest cron entry"
   exit 0
@@ -29,10 +37,15 @@ if [ "$off_m" != "00" ] || [ $h1 -lt 0 ] || [ $h2 -gt 23 ]; then
 fi
 HOURS="$h1,$h2"
 
+# the command, shell-quoted, with % escaped (cron turns a bare % into a newline)
+CMD="$(printf '%q' "$REPO/scripts/run_daily.sh")"
+for a in ${DAILY_ARGS[@]+"${DAILY_ARGS[@]}"}; do CMD+=" $(printf '%q' "$a")"; done
+CMD="${CMD//%/\\%}"
+
 chmod +x "$REPO/scripts/run_daily.sh"
 {
   [ -n "$current" ] && printf '%s\n' "$current"
-  echo "3 $HOURS * * 1-5 $REPO/scripts/run_daily.sh $TAG"
+  echo "3 $HOURS * * 1-5 $CMD $TAG"
 } | crontab -
 
 echo "system timezone offset $sys_off → cron hours $HOURS (= 14:03 and 16:03 KST)"

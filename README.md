@@ -38,7 +38,8 @@ scripts/install.sh --serve                              # Mon–Fri 14:03 and 16
 - **`install.sh`** picks the scheduler for the machine: launchd on macOS
   (`install_launchd.sh`), a systemd user timer on Linux (`install_systemd.sh`), cron where there
   is no systemd (`install_cron.sh`, no `--serve`). You can also run any of them directly; each
-  takes `--remove` to uninstall.
+  takes `--remove` to uninstall, `--config FILE` to run with another config, and (with
+  `--serve`) `--host ADDR` / `--port N` for the site.
 - **Linux (systemd):** the timer is `Persistent`, so a run that was due while the machine was
   off or asleep starts when it's back. The installer enables linger so the jobs run while you're
   logged out (if that's refused, run `sudo loginctl enable-linger $USER`). Next runs:
@@ -94,6 +95,22 @@ Same UI, but it serves **every** paper in the database straight from SQLite (alw
 no rebuild after a run). Ratings and bookmarks you set there are saved directly to the
 database, so no export is needed. `scripts/install.sh --serve` keeps it running (systemd user
 service on Linux, launchd agent on macOS); without systemd, use `tmux`.
+
+### A shared lab server
+A second digest (for example a lab's) runs from its own clone on another machine, with its own
+config, `.env` and database, and is only served, never published. `config.lab.yaml` is one
+(`delivery.publish: false`, `site: false`):
+```bash
+scripts/install.sh --serve --config config.lab.yaml --host 0.0.0.0   # http://<machine>:8000
+```
+- The site has **no login**: anyone who can reach the port can read it and change ratings, and
+  everyone's likes and ratings train the scorer (shared taste). Keep it on the lab network or
+  behind a VPN / SSH tunnel.
+- Leave your personal `ZOTERO_API_KEY` out of that machine's `.env`, or the lab's likes land in
+  your library. Discord works, but without publishing the message has no link.
+- Use a separate clone on a separate machine (or user account): the database, `state/seen.json`
+  and logs live in the clone, and the scheduled jobs have fixed names, so installing a second
+  digest on the same account replaces the first one's jobs.
 
 ### Ratings and bookmarks
 Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them with 🔖 (`b`).
