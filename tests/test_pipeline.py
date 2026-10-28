@@ -820,6 +820,11 @@ class FakeStreamClient:
     def __init__(self):
         self.beta = types.SimpleNamespace(messages=self)
         self.requests = []
+        self.uploaded, self.deleted = [], []
+        self.files = types.SimpleNamespace(
+            upload=lambda file, **kw: self.uploaded.append(file) or types.SimpleNamespace(id="file_1"),
+            delete=lambda fid: self.deleted.append(fid),
+        )
 
     @contextlib.contextmanager
     def stream(self, **kw):
@@ -934,3 +939,17 @@ def test_site_button_explains_once_within_budget(tmp_path, monkeypatch):
     assert not (tmp_path / "site/data/x/2610.0003.json").exists()
     db.prune(con, 1)
     assert {r[0] for r in con.execute("SELECT id FROM papers")} >= {"2610.0001", "2610.0002"}
+
+
+def test_big_pdf_is_uploaded_not_inlined(monkeypatch):
+    """A 28 MB PDF is 37 MB as base64, over the 32 MB request limit: upload it, then delete it."""
+    from digest import llm as llm_mod
+
+    monkeypatch.setattr(llm_mod, "INLINE_PDF_BYTES", 10)
+    client = FakeStreamClient()
+    LLM(client).ask_document("claude-opus-5-5", "sys", b"%PDF-small", "Explain.")
+    assert client.requests[0]["messages"][0]["content"][0]["source"]["type"] == "base64"
+    assert client.uploaded == []
+    LLM(client).ask_document("claude-opus-5-5", "sys", b"%PDF-1.7 a bigger file", "Explain.")
+    assert client.requests[1]["messages"][0]["content"][0]["source"] == {"type": "file", "file_id": "file_1"}
+    assert client.uploaded[0][2] == "application/pdf" and client.deleted == ["file_1"]

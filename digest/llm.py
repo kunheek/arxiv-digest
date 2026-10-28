@@ -15,6 +15,8 @@ PRICES = {
     "claude-sonnet-5-5": (2.0, 10.0),
     "claude-opus-5-5": (4.0, 20.0),
 }
+# Requests are capped at 32 MB, and base64 makes a PDF 4/3 as big, so bigger PDFs are uploaded
+INLINE_PDF_BYTES = 22 * 1024 * 1024
 
 
 class LLM:
@@ -77,28 +79,38 @@ class LLM:
 
         Streams, because a long answer with thinking can outlast a plain request's timeout.
         If the model declines on policy grounds, the API retries on its default fallback model.
+        A PDF too big to send inline is uploaded with the Files API and deleted afterwards.
         """
-        content = [
-            {
-                "type": "document",
-                "source": {
-                    "type": "base64",
-                    "media_type": "application/pdf",
-                    "data": base64.standard_b64encode(pdf).decode(),
-                },
-            },
-            {"type": "text", "text": prompt},
-        ]
-        with self.client.beta.messages.stream(
-            model=model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=[{"role": "user", "content": content}],
-            output_config={"effort": effort},
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-        ) as stream:
-            resp = stream.get_final_message()
+        file_id = None
+        if len(pdf) <= INLINE_PDF_BYTES:
+            source = {
+                "type": "base64",
+                "media_type": "application/pdf",
+                "data": base64.standard_b64encode(pdf).decode(),
+            }
+        else:
+            file_id = self.client.files.upload(
+                file=("paper.pdf", pdf, "application/pdf"), expires_in_seconds=3600
+            ).id
+            source = {"type": "file", "file_id": file_id}
+        content = [{"type": "document", "source": source}, {"type": "text", "text": prompt}]
+        try:
+            with self.client.beta.messages.stream(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=[{"role": "user", "content": content}],
+                output_config={"effort": effort},
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            ) as stream:
+                resp = stream.get_final_message()
+        finally:
+            if file_id:  # it also expires on its own after an hour
+                try:
+                    self.client.files.delete(file_id)
+                except Exception:  # noqa: BLE001
+                    pass
         cost = self._track(resp.model or model, resp.usage)
         if resp.stop_reason == "max_tokens":
             raise RuntimeError("reply was cut off (max_tokens too small)")

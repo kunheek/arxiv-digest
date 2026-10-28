@@ -20,7 +20,7 @@ from .fetch import UA
 from .llm import LLM
 
 PDF_URL = "https://arxiv.org/pdf/{id}"
-MAX_PDF_BYTES = 30 * 1024 * 1024  # the API takes at most 32 MB per request
+MAX_PDF_BYTES = 500 * 1024 * 1024  # the Files API's limit (big PDFs are uploaded, see LLM.ask_document)
 
 SYSTEM = """You explain one research paper to a busy researcher who has not read it.
 Your job is to convey the paper's key information accurately and clearly. Do not review,
@@ -72,7 +72,7 @@ def fetch_pdf(pid: str) -> bytes:
     if not r.content.startswith(b"%PDF"):
         raise ValueError(f"arXiv returned no PDF for {pid}")
     if len(r.content) > MAX_PDF_BYTES:
-        raise ValueError(f"PDF is {len(r.content) >> 20} MB, over the API's 32 MB limit")
+        raise ValueError(f"PDF is {len(r.content) >> 20} MB, over the API's 500 MB limit")
     return r.content
 
 
