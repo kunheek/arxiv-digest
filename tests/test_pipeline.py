@@ -953,3 +953,28 @@ def test_big_pdf_is_uploaded_not_inlined(monkeypatch):
     LLM(client).ask_document("claude-opus-5-5", "sys", b"%PDF-1.7 a bigger file", "Explain.")
     assert client.requests[1]["messages"][0]["content"][0]["source"] == {"type": "file", "file_id": "file_1"}
     assert client.uploaded[0][2] == "application/pdf" and client.deleted == ["file_1"]
+
+
+def test_about_dialog_follows_config(tmp_path):
+    import http.server
+    import threading
+    import urllib.request
+    import yaml
+    from digest import db, serve, site
+    cfg = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", "config.kcvl.yaml")))
+    html = site.about_html(cfg)
+    for c in cfg["categories"]:
+        assert f"<code>{c}</code>" in html
+    assert "Claude Haiku 5.5" in html and "Claude Opus 5.5" in html
+    assert "a &amp; b" in site.about_html({"interest_profile": "a & b"})  # the profile is escaped
+    path = str(tmp_path / "d.db")
+    db.connect(path).close()
+    for flag in (True, False):  # the server adds the dialog only when delivery.about is set
+        h = serve.make_handler(path, "T", {**cfg, "delivery": {"about": flag}})
+        httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), h)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            page = urllib.request.urlopen(f"http://127.0.0.1:{httpd.server_address[1]}/").read().decode()
+        finally:
+            httpd.shutdown()
+        assert ('id="aboutbox"' in page) == flag and "{{ABOUT}}" not in page

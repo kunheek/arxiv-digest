@@ -23,40 +23,17 @@ interest_profile: |
   This is a lab-wide digest for a computer vision and machine learning lab working on machine (deep) learning for 3D computer vision, generative AI, AI with physics, man-machine interfaces and robotics. Several students read it, so a paper only has to matter to one of the topics below.
 
   Core interests:
-  - World models: video world models and world simulators (interactive, action- or
-    camera-conditioned, egocentric and embodied), long-horizon memory and consistency when a
-    scene is revisited (KV-cache retrieval, compression and compositing), physics-informed and
-    4D world models, learned particle and neural-operator simulators, world models for
-    planning, reasoning and robot learning
-  - Autoregressive diffusion transformers: autoregressive and causal (chunk-wise, streaming)
-    video diffusion, long video generation, KV caching, sparse and dynamics-aware attention,
-    distillation and few-step sampling for real-time generation
-  - Video diffusion transformers: architecture, training, camera and motion control, video
-    generation with 3D consistency, and efficient inference (caching, distillation,
-    quantization, sparse attention)
-  - Physical AI: physics-based reconstruction and simulation (MPM, deformable and articulated
-    objects, cloth), physics-aware video and 3D generation, differentiable physics, simulation
-    as supervision, physics-neural hybrid models learned from video
-  - 3D hand reconstruction and pose: single and interacting two hands, hand-object and
-    hand-deformable-object interaction, grasping and grasp synthesis, hand texture and shape,
-    egocentric hand tracking, diffusion-based hand pose estimation
-  - 3D human body, motion and avatars: reconstruction from images or occlusion, animatable and
-    multi-layered (clothed) Gaussian avatars, egocentric and whole-body motion, controllable and
-    large-scale motion generation (diffusion, flow), motion priors for physics-based character
-    control, human-object interaction
-  - Robot learning and embodied AI: dexterous and deformable-object manipulation, whole-body and
-    mobile manipulation, learning from human demonstrations and videos, generalist robot
-    policies and vision-language-action models (VLAs) and how to steer or adapt them, sim-to-real
-  - 3D/4D reconstruction: 3D/2D Gaussian splatting, neural implicit surfaces, dynamic and 4D
-    scenes and surfaces, sparse-view surface reconstruction, 2D-3D inpainting and editing
-  - Generative models: diffusion, flow matching and score-based models for images, video, 3D
-    and motion
-  - Transformer architecture research: vision transformers (ViT), state space models (SSMs,
-    e.g. Mamba), linear and sparse attention, positional encodings, efficient multimodal LLMs
-    (visual token pruning and sparse vision-language interaction), and other efficient or
-    alternative sequence models
-  - 6D object pose estimation (category-level, model-free, one-shot) and 3D object detection
-    (including semi-supervised)
+  - Physical AI: physics-based reconstruction and simulation (MPM, deformable and articulated objects, cloth), physics-aware video and 3D generation, differentiable physics, simulation as supervision, physics-neural hybrid models learned from video
+  - 3D hand reconstruction and pose: single and interacting two hands, hand-object and hand-deformable-object interaction, grasping and grasp synthesis, hand texture and shape, egocentric hand tracking, diffusion-based hand pose estimation
+  - 3D human body, motion and avatars: reconstruction from images or occlusion, animatable and multi-layered (clothed) Gaussian avatars, egocentric and whole-body motion, controllable and large-scale motion generation (diffusion, flow), motion priors for physics-based character control, human-object interaction
+  - Robot learning and embodied AI: dexterous and deformable-object manipulation, whole-body and mobile manipulation, learning from human demonstrations and videos, generalist robot policies and vision-language-action models (VLAs) and how to steer or adapt them, sim-to-real
+  - 3D/4D reconstruction: 3D/2D Gaussian splatting, neural implicit surfaces, dynamic and 4D scenes and surfaces, sparse-view surface reconstruction, 2D-3D inpainting and editing
+  - World models: video world models and world simulators (interactive, action- or camera-conditioned, egocentric and embodied), long-horizon memory and consistency when a scene is revisited (KV-cache retrieval, compression and compositing), physics-informed and 4D world models, learned particle and neural-operator simulators, world models for planning, reasoning and robot learning
+  - Autoregressive diffusion transformers: autoregressive and causal (chunk-wise, streaming) video diffusion, long video generation, KV caching, sparse and dynamics-aware attention, distillation and few-step sampling for real-time generation
+  - Video diffusion transformers: architecture, training, camera and motion control, video generation with 3D consistency, and efficient inference (caching, distillation, quantization, sparse attention)
+  - Generative models: diffusion, flow matching and score-based models for images, video, 3D and motion
+  - Transformer architecture research: vision transformers (ViT), state space models (SSMs, e.g. Mamba), linear and sparse attention, positional encodings, efficient multimodal LLMs (visual token pruning and sparse vision-language interaction), and other efficient or alternative sequence models
+  - 6D object pose estimation (category-level, model-free, one-shot) and 3D object detection (including semi-supervised)
 
   Secondary interests:
   - Multimodal foundation models and vision-language models, and their use in robotics,
@@ -218,3 +195,4 @@ delivery:
   publish: false             # never push to GitHub Pages
   publish_branch: gh-pages   # not used
   site_title: KCVL arXiv digest
+  about: true                # ⓘ "About this digest" on the site, shown on a visitor's first visit

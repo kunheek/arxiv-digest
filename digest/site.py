@@ -96,9 +96,91 @@ def shards_for(papers: list[dict]) -> dict[str, dict]:
     return out
 
 
-def page_html(title: str, local: bool = False) -> str:
+CATEGORY_NAMES = {
+    "cs.AI": "Artificial Intelligence",
+    "cs.CG": "Computational Geometry",
+    "cs.CL": "Computation and Language",
+    "cs.CV": "Computer Vision and Pattern Recognition",
+    "cs.GR": "Graphics",
+    "cs.HC": "Human-Computer Interaction",
+    "cs.LG": "Machine Learning",
+    "cs.MM": "Multimedia",
+    "cs.NE": "Neural and Evolutionary Computing",
+    "cs.RO": "Robotics",
+    "eess.IV": "Image and Video Processing",
+    "stat.ML": "Machine Learning (statistics)",
+}
+
+
+def _model_name(model: str) -> str:
+    """claude-haiku-5-5 → Claude Haiku 5.5"""
+    words = model.split("-")
+    nums = [w for w in words if w.isdigit()]
+    names = [w.capitalize() for w in words if not w.isdigit()]
+    return " ".join(names + [".".join(nums)] if nums else names)
+
+
+def about_html(cfg: dict) -> str:
+    """The "About this digest" dialog (delivery.about): which feeds, and how papers get ranked,
+    written from the config so it stays true when the config changes."""
+    from html import escape as e
+
+    lim, rk, md = cfg.get("limits", {}), cfg.get("ranking", {}), cfg.get("models", {})
+    fb, xp = cfg.get("feedback", {}), cfg.get("explain", {})
+    cats = "".join(
+        f"<li><a href=\"https://arxiv.org/list/{e(c)}/new\" target=\"_blank\" rel=\"noopener\">"
+        f"<code>{e(c)}</code></a> {e(CATEGORY_NAMES.get(c, ''))}</li>"
+        for c in cfg.get("categories", [])
+    )
+    kinds = set(cfg.get("announce_types", ["new", "cross"]))
+    which = "New submissions" + (" and cross-lists from other categories" if "cross" in kinds else "")
+    steps = [
+        "<b>Fetch.</b> Every weekday, after arXiv's daily announcement, the day's papers in "
+        "these categories come in from arXiv's feeds.",
+        f"<b>Score.</b> {e(_model_name(md.get('scorer', 'claude-haiku')))} reads every abstract and "
+        "scores it 0–10 three ways: relevance to the lab's interest profile (below), quality, and "
+        "field-wide impact.",
+        f"<b>Check.</b> The top {lim.get('enrich_top_n', 30)} get their authors' affiliations "
+        "checked; papers from watched authors or institutions (⭐) get a bonus.",
+        f"<b>Review.</b> {e(_model_name(md.get('summarizer', 'claude-sonnet')))} re-checks the "
+        f"impact of the top {rk.get('impact_review_n', 20)} and writes TL;DRs for the top "
+        f"{lim.get('summarize_top_k', 10)}.",
+        "<b>Rank.</b> The score shown is relevance, lowered a little for weak papers, plus the "
+        f"watchlist bonus. Papers with impact ≥ {rk.get('impact_min', 7)} (📌) stay near the top "
+        "whatever their topic.",
+    ]
+    if fb.get("enabled"):
+        steps.append(
+            "<b>Learn.</b> Ratings, likes and bookmarks are shared by everyone here. Papers rated "
+            f"{fb.get('min_rating', 4)}★ or more, liked or bookmarked (up to "
+            f"{fb.get('max_examples', 30)}) are shown to the scorer as examples of the lab's taste "
+            "from the next day on, and <i>for you ♥</i> sorts by similarity to them."
+        )
+    if xp.get("enabled", True):
+        budget = xp.get("daily_budget_usd", 5)
+        steps.append(
+            f"<b>Explain.</b> Expand a paper and press <i>Explain this paper</i>: "
+            f"{e(_model_name(xp.get('model', 'claude-opus')))} reads the whole PDF and writes up its "
+            "key points (about a minute, ≈ $0.20" + (f"; ${budget} a day for everyone" if budget else "")
+            + "). Explanations are saved, so each paper is explained once."
+        )
+    profile = e(cfg.get("interest_profile", "").strip())
+    return (
+        '<dialog id="aboutbox">\n  <h2>About this digest</h2>\n'
+        f"  <p>{which} in these arXiv categories, ranked for the lab:</p>\n"
+        f'  <ul class="cats">{cats}</ul>\n'
+        "  <h2>How it works</h2>\n  <ol>" + "".join(f"<li>{s}</li>" for s in steps) + "</ol>\n"
+        f"  <details><summary>Interest profile used for scoring</summary><pre>{profile}</pre></details>\n"
+        '  <p class="qn">Press <kbd>?</kbd> for search syntax and shortcuts, <kbd>i</kbd> to see this again.</p>\n'
+        '  <form method="dialog"><button class="btn">Got it</button></form>\n</dialog>'
+    )
+
+
+def page_html(title: str, local: bool = False, about: str = "") -> str:
+    """`about`: the about_html() dialog, or "" for none (the ⓘ button stays hidden)."""
     with open(os.path.join(ASSETS, "index.html")) as f:
-        return f.read().replace("{{TITLE}}", title + (" (local)" if local else ""))
+        page = f.read().replace("{{TITLE}}", title + (" (local)" if local else ""))
+    return page.replace("{{ABOUT}}", about)
 
 
 def build(

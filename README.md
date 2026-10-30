@@ -113,6 +113,9 @@ scripts/install.sh --serve --config config.kcvl.yaml --host 0.0.0.0   # http://<
   the last click wins.
 - Leave your personal `ZOTERO_API_KEY` out of that machine's `.env`, or the lab's likes land in
   your library; `config.kcvl.yaml` turns Zotero and Discord off (`zotero.enabled`, `delivery.discord`).
+- `delivery.about: true` adds an ⓘ button (key <kbd>i</kbd>) explaining the site: the arXiv
+  categories and how papers are scored, written from the config. It opens by itself on each
+  visitor's first visit.
 - Use a separate clone on a separate machine (or user account): the database, `state/seen.json`
   and logs live in the clone, and the scheduled jobs have fixed names, so installing a second
   digest on the same account replaces the first one's jobs.

@@ -139,7 +139,8 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
     vectors = None  # embed.Cache, created on first use (numpy/fastembed import is lazy)
     taste = {"lock": threading.Lock(), "key": None, "body": b""}
     days = _Lru(64)  # built day files (~0.5 MB gzipped each), so a popular day is built once
-    page = site.page_html(title, local=True).encode()
+    about = site.about_html(cfg) if cfg.get("delivery", {}).get("about") else ""
+    page = site.page_html(title, local=True, about=about).encode()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):  # quiet

@@ -13,6 +13,7 @@
     <a class="brand" href="#/">{{TITLE}}</a>
     <input id="q" type="search" placeholder="Search…  au:kanazawa  tag:&quot;world models&quot;  score>=7  -nerf   ( / )" autocomplete="off" spellcheck="false" aria-label="Search">
     <button id="help" class="btn" title="Search syntax and shortcuts">?</button>
+    <button id="about" class="btn" title="About this digest  ( i )" aria-label="About this digest" hidden>i</button>
   </div>
   <div class="tools">
     <div class="daynav" role="group" aria-label="Day"><button id="dprev" title="Older day  ( [ )" aria-label="Older day">‹</button><button id="day" value="" aria-haspopup="dialog" aria-expanded="false" title="Pick a day"></button><button id="dnext" title="Newer day  ( ] )" aria-label="Newer day">›</button></div>
@@ -61,6 +62,7 @@
   <textarea id="bibtext" readonly spellcheck="false"></textarea>
   <form method="dialog"><button class="btn">Close</button></form>
 </dialog>
+{{ABOUT}}
 <script src="app.js"></script>
 </body>
 </html>

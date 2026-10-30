@@ -349,6 +349,13 @@ $("#dens").addEventListener("click", (e) => {
   if (v === "full") $("#list").querySelectorAll(".r").forEach((r) => fillDet(r));
 });
 $("#help").onclick = () => $("#helpbox").showModal();
+// "About this digest" (delivery.about): shown once on a visitor's first visit, then from ⓘ or i
+const about = () => { const d = $("#aboutbox"); if (d && !d.open) d.showModal(); };
+if ($("#aboutbox")) {
+  $("#about").hidden = false;
+  $("#about").onclick = about;
+  if (!store.get("aboutSeen")) { about(); store.set("aboutSeen", "1"); }
+}
 $("#list").addEventListener("click", (e) => {
   if (e.target.closest("a")) return;
   const bb = e.target.closest(".bibbtn");
@@ -488,6 +495,7 @@ document.addEventListener("keydown", (e) => {
     case "l": if (at) like(rows[+at.dataset.i][0]); break;
     case "b": if (at) bookmark(rows[+at.dataset.i][0]); break;
     case "?": $("#helpbox").showModal(); break;
+    case "i": about(); break;
     default: if (at && /^[0-5]$/.test(e.key)) rate(rows[+at.dataset.i][0], +e.key);
   }
 });
