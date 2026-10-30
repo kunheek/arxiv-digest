@@ -135,11 +135,10 @@ watch_institutions:
   - MIT
   - "Carnegie Mellon|CMU"
   - "UC Berkeley"
-  - "Max Planck"
-  - "ETH Zurich|ETH Zürich"
-  - "Meta|FAIR|Reality Labs"
-  - "Google DeepMind|Google Research|Google"
   - NVIDIA
+  - Apple
+  - "Google DeepMind|Google Research|Google"
+  - "Meta|FAIR|Reality Labs"
 
 ranking:
   author_bonus: 3.0
