@@ -36,7 +36,7 @@ class _Cache:
                 if rev != self.rev:
                     days = {r["date"]: dict(r) for r in con.execute("SELECT * FROM days")}
                     body = json.dumps(
-                        site.index_payload(db.all_papers(con, cols=db.INDEX_COLS), days),
+                        site.index_payload(db.all_papers(con, cols=db.INDEX_COLS), days, db.updated_at(con)),
                         ensure_ascii=False,
                         separators=(",", ":"),
                     ).encode()

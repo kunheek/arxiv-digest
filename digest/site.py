@@ -67,10 +67,11 @@ def index_row(p: dict) -> list:
     ]
 
 
-def index_payload(papers: list[dict], days: dict) -> dict:
+def index_payload(papers: list[dict], days: dict, updated: str = "") -> dict:
     return {
         "papers": [index_row(p) for p in papers],
         "days": {d: {"total": v["total"]} for d, v in days.items()},
+        "updated": updated,
     }
 
 
@@ -216,7 +217,7 @@ def build(
 
     for day, shard in shards_for(papers).items():
         _dump(os.path.join(out, "data", "d", f"{day}.json"), shard)
-    _dump(os.path.join(out, "data", "index.json"), index_payload(papers, days))
+    _dump(os.path.join(out, "data", "index.json"), index_payload(papers, days, db.updated_at(con)))
     # Read-only mirror of the preferences you set on the local site (ids on this site only).
     ids = {p["id"] for p in papers}
     explained = sorted(set(db.explained(con)) & ids)

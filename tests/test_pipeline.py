@@ -978,3 +978,16 @@ def test_about_dialog_follows_config(tmp_path):
         finally:
             httpd.shutdown()
         assert ('id="aboutbox"' in page) == flag and "{{ABOUT}}" not in page
+
+
+def test_index_says_when_papers_were_last_added(tmp_path):
+    import datetime as dt
+    from digest import db, site
+    con = db.connect(str(tmp_path / "d.db"))
+    assert db.updated_at(con) == ""  # a database from before this
+    db.upsert(con, [_paper("2610.0001")], "2026-10-16", {"total": 1, "cost": 0, "calls": 0})
+    t = dt.datetime.fromisoformat(db.updated_at(con))
+    assert abs((dt.datetime.now(dt.timezone.utc) - t).total_seconds()) < 60
+    out = str(tmp_path / "site")
+    site.build(con, out, "T")
+    assert json.load(open(os.path.join(out, "data", "index.json")))["updated"] == db.updated_at(con)

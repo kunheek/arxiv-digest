@@ -315,7 +315,7 @@ async function view(keepScroll) {
   $("#list").innerHTML = "";
   const total = s.d ? DATA.days[s.d]?.total : null;
   $("#summary").innerHTML = `<span><b>${rows.length}</b> paper${rows.length === 1 ? "" : "s"}${s.d ? ` on <b>${s.d}</b>${total ? ` (kept from ${total} scanned)` : ""}` : " across all days"}</span>
-    <span>${s.q || s.min !== "0" || s.w || s.c || s.d ? `<a href="#/?d=${dates[0]}">reset</a>` : ""}</span>`;
+    <span>${updatedHTML()}${s.q || s.min !== "0" || s.w || s.c || s.d ? `<a href="#/?d=${dates[0]}">reset</a>` : ""}</span>`;
   const counts = {};
   for (const r of rows) for (const t of r[4]) counts[t] = (counts[t] || 0) + 1;
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 14);
@@ -349,6 +349,13 @@ $("#dens").addEventListener("click", (e) => {
   if (v === "full") $("#list").querySelectorAll(".r").forEach((r) => fillDet(r));
 });
 $("#help").onclick = () => $("#helpbox").showModal();
+// when the last run wrote papers, in the viewer's own time zone
+const updatedHTML = () => {
+  const t = DATA.updated && new Date(DATA.updated);
+  if (!t || isNaN(t)) return "";
+  const f = t.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
+  return `<span class="upd" title="Last time new papers were added">Updated ${esc(f)}</span>`;
+};
 // "About this digest" (delivery.about): shown once on a visitor's first visit, then from ⓘ or i
 const about = () => { const d = $("#aboutbox"); if (d && !d.open) d.showModal(); };
 if ($("#aboutbox")) {

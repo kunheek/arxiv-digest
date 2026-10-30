@@ -105,6 +105,10 @@ def upsert(
                 "INSERT OR REPLACE INTO days VALUES (?,?,?,?)",
                 (date, stats.get("total"), stats.get("cost"), stats.get("calls")),
             )
+        con.execute(  # "Updated …" on the site
+            "INSERT OR REPLACE INTO meta VALUES ('updated_at', ?)",
+            (dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),),
+        )
         bump_papers_rev(con)
 
 
@@ -115,6 +119,12 @@ def bump_papers_rev(con: sqlite3.Connection) -> None:
         "INSERT INTO meta VALUES ('papers_rev', '1') "
         "ON CONFLICT(k) DO UPDATE SET v = CAST(v AS INTEGER) + 1"
     )
+
+
+def updated_at(con: sqlite3.Connection) -> str:
+    """When papers were last written (UTC ISO 8601), or "" for a database from before this."""
+    r = con.execute("SELECT v FROM meta WHERE k = 'updated_at'").fetchone()
+    return r[0] if r else ""
 
 
 def papers_rev(con: sqlite3.Connection) -> tuple:
