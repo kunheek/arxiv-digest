@@ -991,3 +991,33 @@ def test_index_says_when_papers_were_last_added(tmp_path):
     out = str(tmp_path / "site")
     site.build(con, out, "T")
     assert json.load(open(os.path.join(out, "data", "index.json")))["updated"] == db.updated_at(con)
+
+
+def test_server_counts_visitors_without_keeping_ips(tmp_path):
+    import http.server
+    import threading
+    import urllib.request
+    from digest import db, serve
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    db.upsert(con, [_paper("2610.0001")], "2026-10-16", {"total": 1, "cost": 0, "calls": 0})
+    con.close()
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T"))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    get = lambda p, h={}: urllib.request.urlopen(urllib.request.Request(base + p, headers=h)).read()
+    try:
+        get("/"); get("/"); get("/app.js"); get("/data/index.json")    # only page loads count
+        get("/", {"X-Forwarded-For": "100.64.0.7"})                    # behind tailscale serve
+        urllib.request.urlopen(urllib.request.Request(
+            base + "/api/like", json.dumps({"id": "2610.0001", "on": True}).encode(),
+            {"Content-Type": "application/json"})).read()
+    finally:
+        httpd.shutdown()
+    con = db.connect(path)
+    rows = sorted(tuple(r)[2:] for r in con.execute("SELECT * FROM visits"))
+    assert rows == [(1, 0), (2, 1)]                     # two visitors: 2 loads + 1 click, 1 load
+    stored = " ".join(r[1] for r in con.execute("SELECT * FROM visits"))
+    assert "127.0.0.1" not in stored and "100.64" not in stored
+    report = db.visit_report(con)
+    assert "2 distinct visitors" in report

@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS explanations (
 CREATE TABLE IF NOT EXISTS explain_costs (
   at TEXT NOT NULL, id TEXT NOT NULL, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost REAL
 );
+CREATE TABLE IF NOT EXISTS visits (
+  date TEXT NOT NULL, visitor TEXT NOT NULL, pages INTEGER DEFAULT 0, actions INTEGER DEFAULT 0,
+  PRIMARY KEY (date, visitor)
+);
 """
 JSON_COLS = (
     "authors",
@@ -354,6 +358,47 @@ def get_explanation(con: sqlite3.Connection, pid: str) -> dict | None:
 
 def explained(con: sqlite3.Connection) -> list[str]:
     return [r["id"] for r in con.execute("SELECT id FROM explanations WHERE status = 'done'")]
+
+
+def log_visit(con: sqlite3.Connection, ip: str, action: bool = False) -> None:
+    """Count a page load (or a rating/like/bookmark/explain click) by this visitor today (KST).
+    Only a salted hash of the IP is kept: enough to count distinct visitors, not to list them.
+    The salt lives in this database, so hashes can't be matched across databases."""
+    import hashlib
+    import secrets
+    from zoneinfo import ZoneInfo
+
+    with con:
+        con.execute("INSERT OR IGNORE INTO meta VALUES ('visit_salt', ?)", (secrets.token_hex(16),))
+        salt = con.execute("SELECT v FROM meta WHERE k = 'visit_salt'").fetchone()[0]
+        who = hashlib.sha256((salt + ip).encode()).hexdigest()[:16]
+        day = dt.datetime.now(ZoneInfo("Asia/Seoul")).date().isoformat()
+        col = "actions" if action else "pages"
+        con.execute(
+            f"INSERT INTO visits (date, visitor, {col}) VALUES (?, ?, 1) "
+            f"ON CONFLICT(date, visitor) DO UPDATE SET {col} = {col} + 1",
+            (day, who),
+        )
+
+
+def visit_report(con: sqlite3.Connection, days: int = 30) -> str:
+    """Per day: distinct visitors, page loads, visitors who clicked something, clicks."""
+    from zoneinfo import ZoneInfo
+
+    today = dt.datetime.now(ZoneInfo("Asia/Seoul")).date()
+    since = (today - dt.timedelta(days=days - 1)).isoformat()
+    rows = con.execute(
+        "SELECT date, COUNT(*), SUM(pages), SUM(actions > 0), SUM(actions) FROM visits "
+        "WHERE date >= ? GROUP BY date ORDER BY date",
+        (since,),
+    ).fetchall()
+    if not rows:
+        return f"no visits logged in the last {days} days"
+    out = ["date        visitors  page loads  clicked  clicks"]
+    out += [f"{d}  {v:8d}  {p:10d}  {a:7d}  {c:6d}" for d, v, p, a, c in rows]
+    n = con.execute("SELECT COUNT(DISTINCT visitor) FROM visits WHERE date >= ?", (since,)).fetchone()[0]
+    out.append(f"{n} distinct visitors over these {len(rows)} day(s)")
+    return "\n".join(out)
 
 
 def explain_spent(con: sqlite3.Connection, since: str = "") -> tuple[int, float]:

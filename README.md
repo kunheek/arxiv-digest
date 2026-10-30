@@ -116,6 +116,10 @@ scripts/install.sh --serve --config config.kcvl.yaml --host 0.0.0.0   # http://<
 - `delivery.about: true` adds an ⓘ button (key <kbd>i</kbd>) explaining the site: the arXiv
   categories and how papers are scored, written from the config. It opens by itself on each
   visitor's first visit.
+- **Visitors:** the server counts page loads and clicks (ratings, likes, bookmarks, explain) per
+  visitor per day, keeping only a salted hash of each IP, never the IP. `python run.py --config
+  config.kcvl.yaml --visits [DAYS]` prints visitors, page loads and clicks per day. People behind
+  one router count as one visitor; one person on two devices counts as two.
 - Use a separate clone on a separate machine (or user account): the database, `state/seen.json`
   and logs live in the clone, and the scheduled jobs have fixed names, so installing a second
   digest on the same account replaces the first one's jobs.

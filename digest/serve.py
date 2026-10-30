@@ -164,6 +164,21 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
             self.end_headers()
             self.wfile.write(body)
 
+        def _visit(self, action: bool = False):
+            """Count this visitor (db.log_visit); never fails the request."""
+            ip = self.client_address[0]
+            fwd = self.headers.get("X-Forwarded-For", "")
+            if fwd and ip in ("127.0.0.1", "::1"):  # behind a local proxy (e.g. tailscale serve)
+                ip = fwd.split(",")[0].strip()
+            try:
+                con = db.connect(db_path)
+                try:
+                    db.log_visit(con, ip, action)
+                finally:
+                    con.close()
+            except sqlite3.Error:
+                pass
+
         def _json(self, obj, code: int = 200):
             self._send(json.dumps(obj).encode(), "application/json", code=code)
 
@@ -171,6 +186,7 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
             nonlocal vectors
             path = self.path.split("?")[0]
             if path in ("/", "/index.html"):
+                self._visit()
                 return self._send(page, "text/html; charset=utf-8")
             if path == "/data/index.json":
                 body, etag = cache.index_gz()
@@ -257,7 +273,10 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                 con = db.connect(db_path)
                 try:
                     if self.path == "/api/explain":
-                        return self._json(*request_explanation(con, pid))
+                        body, code = request_explanation(con, pid)
+                        if code in (200, 202):
+                            self._visit(action=True)
+                        return self._json(body, code)
                     if self.path == "/api/rating":
                         db.set_rating(con, pid, int(body.get("rating", 0)))
                     elif self.path in ("/api/like", "/api/bookmark"):
@@ -271,6 +290,7 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                         return self._json({"error": "unknown endpoint"}, 404)
                 finally:
                     con.close()
+                self._visit(action=True)
                 self._json({"ok": True})
             except (KeyError, ValueError, json.JSONDecodeError) as e:
                 self._json({"error": str(e)}, 400)

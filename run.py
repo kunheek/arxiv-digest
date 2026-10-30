@@ -13,6 +13,7 @@ Free modes (no arXiv, no Claude):
   python run.py --eval-taste                 # does the embedding taste score beat Sonnet's?
   python run.py --zotero-sync                # push liked/bookmarked papers to Zotero (checks the key)
   python run.py --export-bib refs.bib        # BibTeX for liked/bookmarked papers
+  python run.py --visits [DAYS]              # visitors to the local site per day (default 30)
 """
 
 from __future__ import annotations
@@ -91,6 +92,14 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         metavar="FILE",
         help="load ratings exported from the website into the database",
     )
+    ap.add_argument(
+        "--visits",
+        type=int,
+        nargs="?",
+        const=30,
+        metavar="DAYS",
+        help="visitors to the local site (run.py --serve) per day, last DAYS days (default 30)",
+    )
     ap.add_argument("--embed-backfill", action="store_true", help="embed all papers lacking a vector")
     ap.add_argument("--eval-taste", action="store_true", help="compare Sonnet's score with the embedding taste score")
     ap.add_argument("--zotero-sync", action="store_true", help="push liked/bookmarked papers to Zotero")
@@ -113,6 +122,9 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         from digest import serve
 
         serve.serve(args.db, args.host, args.port, cfg["delivery"].get("site_title", "arXiv digest"), cfg)
+        return 0
+    if args.visits:
+        print(db.visit_report(db.connect(args.db), args.visits))
         return 0
     if args.embed_backfill or args.eval_taste:
         from digest import embed
