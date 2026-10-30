@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arXiv digest</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="bar">
+    <a class="brand" href="#/">arXiv digest</a>
+    <input id="q" type="search" placeholder="Search…  au:kanazawa  tag:&quot;world models&quot;  score>=7  -nerf   ( / )" autocomplete="off" spellcheck="false" aria-label="Search">
+    <button id="help" class="btn" title="Search syntax and shortcuts">?</button>
+    <button id="about" class="btn" title="About this digest  ( i )" aria-label="About this digest" hidden>i</button>
+  </div>
+  <div class="tools">
+    <div class="daynav" role="group" aria-label="Day"><button id="dprev" title="Older day  ( [ )" aria-label="Older day">‹</button><button id="day" value="" aria-haspopup="dialog" aria-expanded="false" title="Pick a day"></button><button id="dnext" title="Newer day  ( ] )" aria-label="Newer day">›</button></div>
+    <select id="min" aria-label="Minimum score"><option value="0">any score</option><option value="4">≥ 4</option><option value="5">≥ 5</option><option value="6">≥ 6</option><option value="7">≥ 7</option><option value="8">≥ 8</option><option value="9">≥ 9</option></select>
+    <select id="sort" aria-label="Sort"><option value="score">best first</option><option value="new">newest first</option><option value="old">oldest first</option></select>
+    <label class="chk"><input type="checkbox" id="w"> ⭐ watched</label>
+    <label class="chk"><input type="checkbox" id="c"> code</label>
+    <label class="chk" title="Bookmarked papers only"><input type="checkbox" id="s"> 🔖 saved</label>
+    <label class="chk" title="Also search TL;DRs and abstracts (loads day files)"><input type="checkbox" id="a"> abstracts</label>
+    <span class="grow"></span>
+    <div class="seg" id="dens" role="group" aria-label="Density"><button data-v="dense" title="One line per paper">Dense</button><button data-v="compact" title="Two lines, click to expand">Compact</button><button data-v="full" title="Everything expanded">Full</button></div>
+  </div>
+  <div id="cal" class="cal" role="dialog" aria-label="Pick a day" hidden>
+    <div class="cal-h"><button class="cal-nav" data-step="1" aria-label="Previous month">‹</button><b id="calm"></b><button class="cal-nav" data-step="-1" aria-label="Next month">›</button></div>
+    <div class="cal-g" id="calg"></div>
+    <div class="cal-f"><button class="btn" data-d="">All days</button><span class="qn" id="calsum"></span><button class="btn" id="callatest">Latest</button></div>
+  </div>
+</header>
+<main>
+  <div id="summary"></div>
+  <div id="facets"></div>
+  <div id="list"></div>
+  <div id="sentinel"></div>
+</main>
+<dialog id="helpbox">
+  <h2>Search</h2>
+  <p>Words match title, tags, authors and arXiv id (all must match). Prefix <code>-</code> to exclude. Quote phrases.</p>
+  <table>
+    <tr><td><code>au:kanazawa</code></td><td>author contains</td></tr>
+    <tr><td><code>tag:"world models"</code></td><td>topic tag contains</td></tr>
+    <tr><td><code>cat:cs.CV</code></td><td>arXiv category</td></tr>
+    <tr><td><code>score&gt;=7</code></td><td>score (&gt; &lt; &gt;= &lt;= =)</td></tr>
+    <tr><td><code>date:2026-10</code></td><td>date prefix</td></tr>
+    <tr><td><code>has:code</code> <code>is:watch</code> <code>is:top</code> <code>is:landmark</code></td><td>flags (top = score ≥ 7)</td></tr>
+    <tr><td><code>quality&gt;=7</code> <code>impact&gt;=7</code></td><td>estimated quality / field-wide impact (0–10); 📌 = big or foundational paper</td></tr>
+    <tr><td><code>rating&gt;=4</code> <code>is:liked</code> <code>is:saved</code> <code>is:rated</code> <code>is:unrated</code></td><td>your own ratings</td></tr>
+    <tr><td><code>is:explained</code></td><td>papers with a 📖 explanation (expand a row: <b>Explain this paper</b> on the local site)</td></tr>
+    <tr><td><code>id:2610.2</code></td><td>arXiv id prefix</td></tr>
+  </table>
+  <h2>Keys</h2>
+  <p><kbd>/</kbd> search · <kbd>j</kbd>/<kbd>k</kbd> next/previous · <kbd>Enter</kbd> or <kbd>x</kbd> expand · <kbd>o</kbd> open arXiv · <kbd>1</kbd>–<kbd>5</kbd> rate (<kbd>0</kbd> clears) · <kbd>l</kbd> like · <kbd>b</kbd> bookmark · <kbd>e</kbd> expand all · <kbd>[</kbd>/<kbd>]</kbd> older/newer day</p>
+  <form method="dialog"><button class="btn">Close</button></form>
+</dialog>
+<dialog id="bibbox">
+  <h2>BibTeX <span class="qn" id="bibmsg"></span></h2>
+  <textarea id="bibtext" readonly spellcheck="false"></textarea>
+  <form method="dialog"><button class="btn">Close</button></form>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
