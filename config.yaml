@@ -7,7 +7,6 @@ categories:
   - cs.GR   # Graphics
   - cs.LG   # Machine Learning
   - cs.AI   # Artificial Intelligence
-  - cs.CG   # Computational Geometry
   - stat.ML # Machine Learning (Statistics)
 
 # "new" = first appearance, "cross" = cross-listed into one of your categories.
@@ -88,7 +87,7 @@ broad_examples:
 # Researchers whose new papers you never want to miss (matched against author lists).
 # Use the name exactly as it appears on arXiv (word order matters).
 watch_authors:
-  - Li Fei-Fei            # how arXiv lists Fei-Fei Li
+  - Li Fei-Fei      # how arXiv lists Fei-Fei Li
   - Angjoo Kanazawa
 
 # Institutions / labs (matched case-insensitively against affiliations
