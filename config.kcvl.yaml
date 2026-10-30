@@ -1,52 +1,69 @@
 # ─────────────────────────────────────────────────────────────
 #  arXiv daily digest — KAIST Computer Vision and Learning lab (KCVL, Prof. Tae-Kyun Kim)
 #  Lab-wide profile, served from the lab machine (run.py --serve), never published to GitHub Pages.
-#  Use with:  run.py --config config.lab.yaml   (run_daily.sh passes extra arguments through)
+#  Use with:  run.py --config config.kcvl.yaml   (run_daily.sh passes extra arguments through)
 # ─────────────────────────────────────────────────────────────
 
 categories:
-  - cs.CV    # Computer Vision and Pattern Recognition
-  - cs.GR    # Graphics (avatars, physics-based animation, Gaussian splatting)
-  - cs.LG    # Machine Learning (generative models, world models)
-  - cs.RO    # Robotics (physical AI, embodied AI, grasping)
-  - cs.AI
+  - cs.AI   # Artificial Intelligence
+  - cs.CV   # Computer Vision and Pattern Recognition
+  - cs.GR   # Graphics
+  - cs.LG   # Machine Learning
+  - cs.RO   # Robotics 
   - stat.ML # Machine Learning (statistics)
 
 # "new" = first appearance, "cross" = cross-listed into one of your categories.
 announce_types: [new, cross]
 
-# Written from the lab's research statement, open-position scope and 2023–2026 publications
-# (https://sites.google.com/view/tkkim), plus current work not on the site yet (video diffusion
-# transformers, transformer architectures). The lab is broad, so the profile is broad too.
+# Written from the lab's research statement and 2026 postdoc call (physical AI, generative AI,
+# world models), its 2023–2026 publications (https://sites.google.com/view/tkkim/publications),
+# and papers members are reading now (world models, autoregressive video diffusion, robot
+# learning). The lab is broad, so the profile is broad too.
 interest_profile: |
-  This is a lab-wide digest for a computer vision and machine learning lab working on
-  machine (deep) learning for 3D computer vision, generative AI, AI with physics,
-  man-machine interfaces and robotics. Several students read it, so a paper only has to
-  matter to one of the topics below.
+  This is a lab-wide digest for a computer vision and machine learning lab working on machine (deep) learning for 3D computer vision, generative AI, AI with physics, man-machine interfaces and robotics. Several students read it, so a paper only has to matter to one of the topics below.
 
-  Core interests (highest priority):
-  - 3D hand reconstruction and pose: single and interacting two hands, hand-object
-    interaction and grasping, hand texture and shape, egocentric hand tracking
-  - 3D human body: reconstruction from images or occlusion, animatable avatars,
-    egocentric and whole-body motion, motion diffusion and motion generation,
-    physics-based character control and human-object interaction
-  - Physical AI: physics-aware reconstruction and simulation (e.g., MPM, deformable objects),
-    physics-aware video and 3D generation, differentiable physics
-  - 3D/4D reconstruction: 3D/2D Gaussian splatting, neural implicit surfaces, dynamic and
-    4D scenes, sparse-view surface reconstruction, 2D-3D inpainting and editing
-  - Generative models: diffusion, flow matching, diffusion transformers (DiTs), for images,
-    video, 3D and motion; video generation with 3D consistency
-  - Video diffusion transformers: architecture, training, long and autoregressive video,
-    camera and motion control, and efficient inference (caching, distillation, few-step
-    sampling, quantization, sparse attention)
+  Core interests:
+  - World models: video world models and world simulators (interactive, action- or
+    camera-conditioned, egocentric and embodied), long-horizon memory and consistency when a
+    scene is revisited (KV-cache retrieval, compression and compositing), physics-informed and
+    4D world models, learned particle and neural-operator simulators, world models for
+    planning, reasoning and robot learning
+  - Autoregressive diffusion transformers: autoregressive and causal (chunk-wise, streaming)
+    video diffusion, long video generation, KV caching, sparse and dynamics-aware attention,
+    distillation and few-step sampling for real-time generation
+  - Video diffusion transformers: architecture, training, camera and motion control, video
+    generation with 3D consistency, and efficient inference (caching, distillation,
+    quantization, sparse attention)
+  - Physical AI: physics-based reconstruction and simulation (MPM, deformable and articulated
+    objects, cloth), physics-aware video and 3D generation, differentiable physics, simulation
+    as supervision, physics-neural hybrid models learned from video
+  - 3D hand reconstruction and pose: single and interacting two hands, hand-object and
+    hand-deformable-object interaction, grasping and grasp synthesis, hand texture and shape,
+    egocentric hand tracking, diffusion-based hand pose estimation
+  - 3D human body, motion and avatars: reconstruction from images or occlusion, animatable and
+    multi-layered (clothed) Gaussian avatars, egocentric and whole-body motion, controllable and
+    large-scale motion generation (diffusion, flow), motion priors for physics-based character
+    control, human-object interaction
+  - Robot learning and embodied AI: dexterous and deformable-object manipulation, whole-body and
+    mobile manipulation, learning from human demonstrations and videos, generalist robot
+    policies and vision-language-action models (VLAs) and how to steer or adapt them, sim-to-real
+  - 3D/4D reconstruction: 3D/2D Gaussian splatting, neural implicit surfaces, dynamic and 4D
+    scenes and surfaces, sparse-view surface reconstruction, 2D-3D inpainting and editing
+  - Generative models: diffusion, flow matching and score-based models for images, video, 3D
+    and motion
   - Transformer architecture research: vision transformers (ViT), state space models (SSMs,
-    e.g. Mamba), linear and sparse attention, positional encodings, and other efficient or
+    e.g. Mamba), linear and sparse attention, positional encodings, efficient multimodal LLMs
+    (visual token pruning and sparse vision-language interaction), and other efficient or
     alternative sequence models
-  - World models for simulation, planning and reasoning
-  - 6D object pose estimation (category-level, model-free, one-shot)
+  - 6D object pose estimation (category-level, model-free, one-shot) and 3D object detection
+    (including semi-supervised)
 
   Secondary interests:
-  - Multimodal foundation models and their use in robotics, embodied AI and AI4Science
+  - Multimodal foundation models and vision-language models, and their use in robotics,
+    embodied AI and AI4Science (e.g. protein structure and function)
+  - Action recognition (skeleton, body-hand) and human and pedestrian trajectory prediction
+  - Image restoration and enhancement (adverse weather, low light), text-guided image editing,
+    self-supervised depth estimation, person re-identification
 
   Important beyond these topics (read by everyone in the lab):
   - General-purpose building blocks (architectures, attention, optimizers, training recipes)
@@ -56,8 +73,12 @@ interest_profile: |
   - Remote sensing and satellite imagery
   - Adversarial robustness
   - Federated learning
+  - Text-only LLM work: alignment, safety, prompting, agents, reasoning benchmarks
+  - Tabular, time-series and recommender-system methods
+  - Optimization and learning theory with no vision, generation or robotics angle
 
-# The lab's own recent papers: "exactly our taste". Titles as listed on the lab's publications page.
+# Papers the lab loves: its own recent work (titles as on the publications page), then papers
+# members are reading now.
 seed_papers:
   # physical AI and physics-based reconstruction
   - "3DPhysVideo: Consistency-Guided Flow SDE for Video Generation via 3D Scene Reconstruction and Physical Simulation"
@@ -68,6 +89,7 @@ seed_papers:
   - "Sparse-GS2Mesh: 3D Gaussian Splatting Guided by Novel Stereo Views and 2DGS for Sparse View Surface Reconstruction"
   - "CoIn: Comprehensive 2D-3D Inpainting with Gaussian Splatting Guidance"
   # hands and hand-object interaction
+  - "Cascaded Diffusion Framework for Probabilistic Coarse-to-Fine Hand Pose Estimation"
   - "SRHand: Super-Resolving Hand Images and 3D Shapes via View/Pose-aware Neural Image Representations and Explicit Meshes"
   - "Dense Hand-Object(HO) GraspNet with Full Grasping Taxonomy and Dynamics"
   - "InterHandGen: Two-Hand Interaction Generation via Cascaded Reverse Diffusion"
@@ -80,10 +102,30 @@ seed_papers:
   - "Egocentric Whole-Body Motion Diffusion with Exemplar-Based Identity Conditioning"
   - "Multi-hypotheses Conditioned Point Cloud Diffusion for 3D Human Reconstruction from Occluded Images"
   - "MAPConNet: Self-supervised 3D Pose Transfer with Mesh and Point Contrastive Learning"
-  # 6D pose
+  # 6D pose and 3D detection
   - "Joint Learning of Pose Regression and Denoising Diffusion with Score Scaling Sampling for Category-level 6D Pose Estimation"
+  - "Learning Adaptive Pseudo-Label Selection for Semi-Supervised 3D Object Detection"
   # image generation and editing
   - "Arbitrary-Scale Image Generation and Upsampling using Latent Diffusion Model and Implicit Neural Decoder"
+  # reading now: world models and autoregressive video diffusion
+  - "WorldKV: Efficient World Memory with World Retrieval and Compression"
+  - "MosaiChunk: Compositing Spatio-Temporal Memory for Autoregressive Video Generation"
+  - "Dynamics-Aware Sparse Attention for Efficient Autoregressive Video Diffusion"
+  - "EgoSim: Egocentric World Simulator for Embodied Interaction Generation"
+  - "PhiZero: A World Model Built Around Physical Language"
+  - "WorldParticle: Unified World Simulation of Lagrangian Particle Dynamics via Transformer"
+  - "NeuIDO: Neural Intrinsic Dynamics Operator for Physics-Informed 4D World Models"
+  - "DeformMaster: An Interactive Physics-Neural World Model for Deformable Objects from Videos"
+  # reading now: motion, avatars and character control
+  - "Kimodo: Scaling Controllable Human Motion Generation"
+  - "SMP: Reusable Score-Matching Motion Priors for Physics-Based Character Control"
+  - "DAMA: Disentangled Body-Anchored Gaussians for Controllable Multi-Layered Avatars"
+  # reading now: robot learning
+  - "Beyond Rigid Grasping: Simulation as Supervision for Deformable Object Grasping"
+  - "HoMMI: Learning Whole-Body Mobile Manipulation from Human Demonstrations"
+  - "Improving Robotic Generalist Policies via Flow Reversal Steering"
+  # reading now: efficient multimodal models
+  - "VISion On Request: Enhanced VLLM efficiency with sparse, dynamically selected, vision-language interactions"
 
 # Field-wide landmarks: teach the IMPACT score what "everyone in the lab should read this" means.
 broad_examples:
@@ -106,23 +148,21 @@ broad_examples:
 # Students are left out on purpose: common names such as "Minje Kim" or "Donghwan Kim" would
 # match unrelated authors every day and hand out the author bonus.
 watch_authors:
-  - Tae-Kyun Kim
-  - Minhyuk Sung
-  - Bjorn Stenger
-  - Binod Bhattarai
+  - Angjoo Kanazawa
+  - Chelsea Finn
+  - Li Fei-Fei
 
 # Institutions / labs (matched case-insensitively against affiliations from the arXiv HTML).
 watch_institutions:
-  - "KAIST|Korea Advanced Institute of Science and Technology"
-  - "Imperial College London|Imperial College"
+  - Stanford
+  - MIT
+  - "Carnegie Mellon|CMU"
+  - "UC Berkeley"
   - "Max Planck"
   - "ETH Zurich|ETH Zürich"
   - "Meta|FAIR|Reality Labs"
   - "Google DeepMind|Google Research|Google"
   - NVIDIA
-  - Stanford
-  - "Carnegie Mellon|CMU"
-  - "Seoul National University|SNU"
 
 ranking:
   author_bonus: 3.0

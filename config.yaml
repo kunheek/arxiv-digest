@@ -3,11 +3,12 @@
 # ─────────────────────────────────────────────────────────────
 
 categories:
-  - cs.CV    # Computer Vision and Pattern Recognition
-  - cs.GR    # Graphics
-  - cs.CG    # Computational Geometry
-  - cs.LG    # Machine Learning
-  - stat.ML  # Machine Learning (Statistics)
+  - cs.CV   # Computer Vision and Pattern Recognition
+  - cs.GR   # Graphics
+  - cs.LG   # Machine Learning
+  - cs.AI   # Artificial Intelligence
+  - cs.CG   # Computational Geometry
+  - stat.ML # Machine Learning (Statistics)
 
 # "new" = first appearance, "cross" = cross-listed into one of your categories.
 # Add "replace" / "replace-cross" to also see updated versions (noisy).
