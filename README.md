@@ -76,8 +76,7 @@ root). Public unless your plan supports private Pages. Controlled by `delivery.s
 - **Views:** Dense (one line per paper), Compact, Full. Click a row to expand.
 - **Search:** words match title, tags, authors, id. Operators: `au:` `tag:` `cat:` `date:`
   `id:` `score>=7` `quality>=7` `impact>=7` `rating>=4` `has:code` `is:watch` `is:top` `is:landmark` `is:rated`
-  `is:unrated`, `-exclude`, `"quoted phrase"`. The *abstracts* toggle also searches TL;DRs and
-  abstracts. Press `?` on the site for shortcuts. Searches live in the URL, so they're shareable.
+  `is:unrated`, `-exclude`, `"quoted phrase"`. Press `?` on the site for shortcuts. Searches live in the URL, so they're shareable.
 - **Scale:** visitors load one compact index plus one small file per day they open.
 - **Database:** `data/digest.db` (git-ignored, back it up) keeps every scored paper
   (`limits.db_min_interest`). **FIFO limit:** when it holds more than `limits.db_max_papers`

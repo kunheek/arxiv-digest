@@ -34,18 +34,18 @@ const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } ca
 function readState() {
   const h = location.hash.replace(/^#\/?/, ""), p = new URLSearchParams(h.replace(/^\?/, ""));
   return { d: p.get("d") || "", q: p.get("q") || "", min: p.get("min") || "0", sort: p.get("sort") || "",
-           w: p.get("w") === "1", c: p.get("c") === "1", a: p.get("a") === "1", s: p.get("s") === "1", l: p.get("l") === "1" };
+           w: p.get("w") === "1", c: p.get("c") === "1", s: p.get("s") === "1", l: p.get("l") === "1" };
 }
 function writeState(s, replace) {
   const p = new URLSearchParams();
   p.set("d", s.d);   // always set: "#/?d=" is all days, a bare "#/" means the latest day
   if (s.q) p.set("q", s.q); if (s.min !== "0") p.set("min", s.min);
-  if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.a) p.set("a", "1"); if (s.s) p.set("s", "1"); if (s.l) p.set("l", "1");
+  if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.s) p.set("s", "1"); if (s.l) p.set("l", "1");
   const url = "#/" + (p.toString() ? "?" + p : "");
   if (replace) history.replaceState(null, "", url); else location.hash = url;
 }
 const uiState = () => ({ d: $("#day").value, q: $("#q").value.trim(), min: $("#min").value,
-  sort: $("#sort").dataset.user ? $("#sort").value : "", w: $("#w").checked, c: $("#c").checked, a: $("#a").checked, s: $("#s").checked, l: $("#l").checked });
+  sort: $("#sort").dataset.user ? $("#sort").value : "", w: $("#w").checked, c: $("#c").checked, s: $("#s").checked, l: $("#l").checked });
 
 // ── data ───────────────────────────────────────────────────────────────
 const shard = (d) => (shards[d] ||= fetch(`data/d/${d}.json`).then((r) => r.json()).catch(() => ({})));
@@ -72,7 +72,7 @@ function parseQuery(q) {
   return toks;
 }
 const cmp = { ">=": (a, b) => a >= b, "<=": (a, b) => a <= b, ">": (a, b) => a > b, "<": (a, b) => a < b, "=": (a, b) => a === b };
-function matchTok(t, r, full) {
+function matchTok(t, r) {
   let ok;
   switch (t.k) {
     case "score": ok = cmp[t.op](r[3], t.v); break;
@@ -89,9 +89,7 @@ function matchTok(t, r, full) {
       : t.v === "landmark" ? (r[11] ?? 0) >= 7
       : t.v === "explained" ? explained.has(r[0]) : t.v === "saved" ? saved.has(r[0]) : t.v === "liked" ? liked.has(r[0]) : t.v === "rated" ? !!ratings[r[0]] : t.v === "unrated" ? !ratings[r[0]] : false; break;
     default: {
-      let hay = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase();
-      if (full) hay += " " + (full.tldr + " " + full.why + " " + full.abs).toLowerCase();
-      ok = hay.includes(t.v);
+      ok = (r[2] + " " + r[4].join(" ") + " " + r[5].join(" ") + " " + r[0]).toLowerCase().includes(t.v);
     }
   }
   return t.neg ? !ok : ok;
@@ -105,16 +103,7 @@ async function compute(s) {
   const free = toks.filter((t) => t.k === "free" && !t.neg);
   cand = cand.filter((r) => toks.filter((t) => t.k !== "free").every((t) => matchTok(t, r)));
   freeTerms = free.map((t) => t.v);
-  const fts = toks.filter((t) => t.k === "free");
-  if (fts.length) {
-    if (s.a) {
-      const need = [...new Set(cand.map((r) => r[1]))];
-      $("#summary").textContent = `Searching abstracts in ${need.length} day file${need.length === 1 ? "" : "s"}…`;
-      await loadShards(need);
-      const full = await Promise.all(cand.map(async (r) => (await shard(r[1]))[r[0]]));
-      cand = cand.filter((r, i) => fts.every((t) => matchTok(t, r, full[i] || { tldr: "", why: "", abs: "" })));
-    } else cand = cand.filter((r) => fts.every((t) => matchTok(t, r)));
-  }
+  cand = cand.filter((r) => toks.filter((t) => t.k === "free").every((t) => matchTok(t, r)));
   const sort = s.sort || (s.d ? "score" : "new");
   cand = cand.slice().sort(sort === "taste" ? (a, b) => (taste[b[0]] ?? -1) - (taste[a[0]] ?? -1) || b[3] - a[3]
     : sort === "score" ? (a, b) => b[3] - a[3] || (a[1] < b[1] ? 1 : -1)
@@ -330,7 +319,7 @@ function syncControls(s) {
   day.value = s.d; day.textContent = dayLabel(s.d); day.title = s.d ? dayInfo(s.d) : "Pick a day";
   $("#dprev").disabled = i < 0 || i === dates.length - 1; $("#dnext").disabled = i <= 0;
   closeCal(); $("#min").value = s.min; $("#q").value !== s.q && document.activeElement !== $("#q") && ($("#q").value = s.q);
-  $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#a").checked = s.a; $("#s").checked = s.s; $("#l").checked = s.l;
+  $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#s").checked = s.s; $("#l").checked = s.l;
 }
 function setDensity(v) {
   document.body.className = "dens-" + v; store.set("dens", v);
@@ -339,7 +328,7 @@ function setDensity(v) {
 
 // ── events ─────────────────────────────────────────────────────────────
 const push = (replace) => { writeState(uiState(), replace); if (replace) view(true); };
-["min", "w", "c", "a", "s", "l"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
+["min", "w", "c", "s", "l"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
 $("#sort").addEventListener("change", (e) => { e.target.dataset.user = 1; push(false); });
 $("#q").addEventListener("input", () => { clearTimeout(view.t); view.t = setTimeout(() => push(true), 200); });
 window.addEventListener("hashchange", () => { $("#sort").dataset.user = readState().sort ? 1 : ""; view(); });
