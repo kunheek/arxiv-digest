@@ -1021,3 +1021,61 @@ def test_server_counts_visitors_without_keeping_ips(tmp_path):
     assert "127.0.0.1" not in stored and "100.64" not in stored
     report = db.visit_report(con)
     assert "2 distinct visitors" in report
+
+
+ATOM_FEED = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+<entry><id>http://arxiv.org/abs/2608.07408v2</id>
+<published>2026-08-07T17:59:01Z</published>
+<title>Addressable Memory
+  for Video World Models</title>
+<summary>  We give video world
+ models a memory. </summary>
+<author><name>Xindi Wu</name></author><author><name>Olga Russakovsky</name></author>
+<category term="cs.CV" scheme="http://arxiv.org/schemas/atom"/><category term="cs.LG"/>
+</entry>
+<entry><id>http://arxiv.org/abs/hep-th/9901001v1</id><published>1999-01-04T00:00:00Z</published>
+<title>Old style</title><summary>x</summary><author><name>A B</name></author></entry>
+<entry><id>http://arxiv.org/api/errors#incorrect_id_format_for_bogus</id><title>Error</title>
+<summary>incorrect id format for bogus</summary></entry>
+</feed>"""
+
+
+def test_parse_arxiv_api():
+    from digest.fetch import parse_api
+    got = parse_api(ATOM_FEED)
+    assert [(p.id, d) for p, d in got] == [("2608.07408", "2026-08-07"), ("hep-th/9901001", "1999-01-04")]
+    p = got[0][0]
+    assert p.title == "Addressable Memory for Video World Models" and p.abstract == "We give video world models a memory."
+    assert p.authors == ["Xindi Wu", "Olga Russakovsky"] and p.categories == ["cs.CV", "cs.LG"]
+    assert p.link == "https://arxiv.org/abs/2608.07408"
+
+
+def test_add_papers_by_id(tmp_path, monkeypatch, capsys):
+    import numpy as np
+    from digest import db, embed, fetch
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    db.upsert(con, [_paper("2610.00001", tldr="keep me", interest=8.0)], "2026-10-01")
+    con.close()
+    asked = []
+    monkeypatch.setattr(fetch, "fetch_by_id", lambda ids: asked.append(ids) or fetch.parse_api(ATOM_FEED))
+    monkeypatch.setattr(embed, "encode", lambda texts: np.eye(len(texts), 384, dtype=np.float32))
+    args = ["--config", os.path.join(root, "config.yaml"), "--db", path, "--like", "--add",
+            "https://arxiv.org/pdf/2608.07408v2", "arXiv:2610.00001", "2608.07408"]
+    assert run.main(args) == 0
+    assert asked == [["2608.07408"]]                       # only the new one is looked up, once
+    con = db.connect(path)
+    assert db.get_paper(con, "2610.00001")["tldr"] == "keep me"   # existing paper not overwritten
+    p = db.get_paper(con, "2608.07408")
+    assert p["date"] == "2026-08-07" and p["title"].startswith("Addressable")
+    assert sorted(db.likes(con)) == ["2608.07408", "2610.00001"] and db.bookmarks(con) == []
+    assert con.execute("SELECT COUNT(*) FROM vectors WHERE id='2608.07408'").fetchone()[0] == 1
+    out = capsys.readouterr().out
+    assert "2610.00001: already in the database" in out and "2608.07408: added (2026-08-07)" in out
+    monkeypatch.setattr(fetch, "fetch_by_id", lambda ids: [])
+    assert run.main(["--config", os.path.join(root, "config.yaml"), "--db", path, "--add", "2611.99999"]) == 1
+    assert "2611.99999: not found on arXiv" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        run.main(["--config", os.path.join(root, "config.yaml"), "--db", path, "--like"])

@@ -14,7 +14,7 @@ SYSTEM = """You are a research assistant triaging today's arXiv papers for one r
 </researcher_profile>
 
 <papers_they_love>
-{seeds}
+{loved}
 </papers_they_love>
 
 For each paper you receive, rate how much THIS researcher would want to read it:
@@ -116,10 +116,9 @@ SCHEMA = {
 
 
 def build_system(cfg: dict, liked: list[str]) -> str:
-    seeds = list(cfg.get("seed_papers", [])) + liked
     return SYSTEM.format(
         profile=cfg["interest_profile"].strip(),
-        seeds="\n".join(f"- {s}" for s in seeds) or "(none)",
+        loved="\n".join(f"- {s}" for s in liked) or "(none)",
         impact_rubric=impact_rubric(cfg),
     )
 

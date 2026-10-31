@@ -58,12 +58,12 @@ PROMPT = "Explain this paper."
 
 
 def arxiv_id(s: str) -> str:
-    """'2610.31642', 'arXiv:2610.31642v2' or an abs/pdf link → '2610.31642' (the database's
-    key; the PDF fetched is the latest version)."""
-    m = re.search(r"(\d{4}\.\d{4,5})(?:v\d+)?", s)
+    """'2610.31642', 'arXiv:2610.31642v2', an old-style 'hep-th/9901001' or an abs/pdf link →
+    '2610.31642' (the database's key; the PDF fetched is the latest version)."""
+    m = re.search(r"(\d{4}\.\d{4,5})(?:v\d+)?|([a-z\-]+)(?:\.[A-Z]{2})?/(\d{7})", s)
     if not m:
         raise ValueError(f"not an arXiv id or link: {s!r}")
-    return m.group(1)
+    return m.group(1) or f"{m.group(2)}/{m.group(3)}"  # math.GT/0309136 → math/0309136
 
 
 def fetch_pdf(pid: str) -> bytes:

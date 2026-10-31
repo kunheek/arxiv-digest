@@ -62,6 +62,7 @@ scripts/install.sh --serve                              # Mon–Fri 14:03 and 16
 | Uninstall | `scripts/install.sh --remove` |
 | Logs | `tail -f logs/$(date +%Y-%m).log` |
 | Rebuild + publish site (free) | `.venv/bin/python run.py --site-only` |
+| Add an older paper and like it (free) | `.venv/bin/python run.py --add 2608.07408 --like` |
 | Build only, preview locally | `run.py --site-only --no-publish && cd site && python3 -m http.server` |
 | Explain a paper (≈ $0.20), also a button on the local site | `.venv/bin/python run.py --explain 2610.31642` |
 | Tests | `.venv/bin/pip install pytest && .venv/bin/python -m pytest -q` |
@@ -130,13 +131,25 @@ Like with ♥ (`l`). Liked, bookmarked and rated papers are protected from FIFO 
 `is:liked`, `is:rated`, `rating>=4`, or the 🔖 saved checkbox. Likes, bookmarks and ratings ≥ `feedback.min_rating` become positive examples for scoring
 (a bookmark you rated lower doesn't).
 
-- **Only the local site can change them**; they're saved straight into the database.
+- **Only the local site (or `run.py --add`, below) can change them**; they're saved straight into the database.
 - **GitHub Pages is read-only.** Each publish includes `data/prefs.json` (your ratings and
   bookmarks) so the public site shows the same picks, and rated/bookmarked papers are always
   included even beyond `site_max_papers`. To push new picks right away instead of waiting for the
   next run: `.venv/bin/python run.py --site-only`.
 
-Liked, bookmarked and highly rated papers become positive examples in later scoring runs.
+Liked, bookmarked and highly rated papers become positive examples in later scoring runs
+(the newest `feedback.max_examples` of them).
+
+### Adding any arXiv paper
+The database only holds papers from the days the digest ran. To add older papers, for example
+favourites that show your taste, give their ids or links:
+```bash
+.venv/bin/python run.py --add 2608.07408 https://arxiv.org/abs/2003.08934 --like   # or --bookmark
+```
+Title, authors and abstract come from the arXiv API (free, no Claude). Each paper is dated by its
+first version and embedded, but not scored or summarized. `--like` / `--bookmark` work like the
+♥ / 🔖 buttons: they become scoring examples and are pushed to Zotero. A paper that's already in
+the database is never overwritten; only the like or bookmark is added.
 
 ### Embeddings (local only)
 Every paper is embedded on your CPU with `fastembed` (`BAAI/bge-small-en-v1.5`, 384-d, stored as
@@ -204,7 +217,8 @@ authors state, and key terms. It is told to report only what the paper says and 
 
 ## Tuning (`config.yaml`)
 - **`interest_profile`** matters most. Be specific about what's core, adjacent and unwanted.
-- **`seed_papers`** are titles that are "exactly my taste".
+- **Taste examples** are your likes, bookmarks and high ratings (see *Ratings and bookmarks*).
+  To teach it with older favourites, add them with `run.py --add ID --like`.
 - **`broad_examples`** are papers you value for field-wide importance rather than topic (Adam,
   the Transformer, …). They only teach the impact score, so they don't pull relevance away from
   your subfield. Add the off-topic papers you put on your reading list.

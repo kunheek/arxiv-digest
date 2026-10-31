@@ -13,6 +13,7 @@ Free modes (no arXiv, no Claude):
   python run.py --eval-taste                 # does the embedding taste score beat Sonnet's?
   python run.py --zotero-sync                # push liked/bookmarked papers to Zotero (checks the key)
   python run.py --export-bib refs.bib        # BibTeX for liked/bookmarked papers
+  python run.py --add ID [ID ...] [--like|--bookmark]  # add any arXiv paper (unscored) to the DB
   python run.py --visits [DAYS]              # visitors to the local site per day (default 30)
 """
 
@@ -55,6 +56,53 @@ def build_site(con, cfg: dict, publish_it: bool = True) -> bool:
         except Exception as e:  # never fail the digest because of the website
             print(f"    WARNING: publish failed: {getattr(e, 'stderr', None) or e}")
     return False
+
+
+def add_papers(con, raw_ids: list[str], cfg: dict, like: bool = False, bookmark: bool = False) -> int:
+    """--add: put arXiv papers of any age into the database (unscored), optionally liking or
+    bookmarking them, which also pushes them to Zotero like the ♥/🔖 buttons do."""
+    from digest import explain, fetch
+
+    try:
+        ids = list(dict.fromkeys(explain.arxiv_id(r) for r in raw_ids))
+    except ValueError as e:
+        print(f"ERROR: {e}")
+        return 1
+    have = {i for i in ids if db.get_paper(con, i)}
+    new = [i for i in ids if i not in have]
+    found = {p.id: (p, d) for p, d in (fetch.fetch_by_id(new) if new else []) if p.title}
+    for pid in ids:
+        if pid in have:  # never overwrite: that would wipe its scores and TL;DR
+            print(f"  {pid}: already in the database")
+        elif pid in found:
+            p, date = found[pid]
+            db.upsert(con, [p], date)
+            print(f"  {pid}: added ({date}) {p.title}")
+        else:
+            print(f"  {pid}: not found on arXiv")
+    ok = [i for i in ids if i in have or i in found]
+    for pid in ok:
+        if like:
+            db.set_like(con, pid, True)
+        if bookmark:
+            db.set_bookmark(con, pid, True)
+    if (like or bookmark) and ok:
+        from digest import zotero
+
+        if zotero.enabled(cfg) and zotero.configured():
+            for pid in ok:
+                try:
+                    print(f"  {pid}: Zotero {zotero.push(con, pid, cfg)}")
+                except Exception as e:  # noqa: BLE001
+                    print(f"  {pid}: Zotero push failed: {e}  (retry: python run.py --zotero-sync)")
+    if found:
+        try:
+            from digest import embed
+
+            embed.embed_missing(con)
+        except Exception as e:  # noqa: BLE001  (missing fastembed, model download, ...)
+            print(f"  embedding failed: {e}  (retry: python run.py --embed-backfill)")
+    return 0 if len(ok) == len(ids) else 1
 
 
 def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
@@ -105,6 +153,14 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     ap.add_argument("--zotero-sync", action="store_true", help="push liked/bookmarked papers to Zotero")
     ap.add_argument("--export-bib", metavar="FILE", help="write BibTeX for liked/bookmarked papers")
     ap.add_argument(
+        "--add",
+        nargs="+",
+        metavar="ID",
+        help="add these arXiv ids/links to the database (any age; not scored or summarized); free",
+    )
+    ap.add_argument("--like", action="store_true", help="with --add: also like them (and push to Zotero)")
+    ap.add_argument("--bookmark", action="store_true", help="with --add: also bookmark them (and push to Zotero)")
+    ap.add_argument(
         "--explain",
         nargs="+",
         metavar="ID",
@@ -112,6 +168,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         "database and shown on the site, cost logged. Re-explains papers already done",
     )
     args = ap.parse_args(argv)
+    if (args.like or args.bookmark) and not args.add:
+        ap.error("--like and --bookmark go with --add")
 
     load_env(os.path.join(os.path.dirname(os.path.abspath(args.config)), ".env"))
     with open(args.config) as f:
@@ -166,6 +224,8 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             f.write("\n".join(bibtex.entry(p) for p in papers))
         print(f"wrote {len(papers)} entries to {args.export_bib}")
         return 0
+    if args.add:
+        return add_papers(db.connect(args.db), args.add, cfg, like=args.like, bookmark=args.bookmark)
     if args.import_ratings or args.site_only:
         con = db.connect(args.db)
         if args.import_ratings:

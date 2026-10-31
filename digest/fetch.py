@@ -71,6 +71,41 @@ def parse_rss(xml_text: str) -> list[Paper]:
     return papers
 
 
+API_URL = "https://export.arxiv.org/api/query"
+ATOM = {"a": "http://www.w3.org/2005/Atom"}
+
+
+def parse_api(xml_text: str) -> list[tuple[Paper, str]]:
+    """arXiv API (Atom) entries → (paper, date of its first version as YYYY-MM-DD). Ids arXiv
+    doesn't know come back as error entries (or none at all) and are skipped."""
+    out = []
+    for e in ET.fromstring(xml_text).iterfind("a:entry", ATOM):
+        m = re.search(r"/abs/(.+?)(v\d+)?$", _text(e, "a:id", ATOM))
+        if not m:
+            continue
+        pid = m.group(1)
+        out.append((
+            Paper(
+                id=pid,
+                title=" ".join(_text(e, "a:title", ATOM).split()),
+                abstract=" ".join(_text(e, "a:summary", ATOM).split()),
+                authors=[_text(a, "a:name", ATOM) for a in e.iterfind("a:author", ATOM)],
+                categories=[c.get("term") for c in e.iterfind("a:category", ATOM) if c.get("term")],
+                announce_type="new",
+                link=f"https://arxiv.org/abs/{pid}",
+            ),
+            _text(e, "a:published", ATOM)[:10],
+        ))
+    return out
+
+
+def fetch_by_id(ids: list[str]) -> list[tuple[Paper, str]]:
+    """Look papers up by id (any age), for adding them by hand."""
+    r = requests.get(API_URL, params={"id_list": ",".join(ids), "max_results": len(ids)}, headers=UA, timeout=60)
+    r.raise_for_status()
+    return parse_api(r.text)
+
+
 def fetch_today(categories: list[str], announce_types: list[str]) -> list[Paper]:
     """Fetch each category separately (combined feeds cap at 2000 items) and de-duplicate."""
     by_id: dict[str, Paper] = {}

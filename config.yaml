@@ -40,39 +40,9 @@ interest_profile: |
   - Adversarial robustness
   - Federated learning
 
-# Papers you consider "exactly my taste". Titles (or arXiv IDs) are enough.
-# From your Zotero library (Inbox + Overleaf); general citations such as PyTorch, SMPL and the
-# classic Bayesian-network papers are left out because they say little about taste.
-seed_papers:
-  # 3D Gaussian Splatting
-  - "3D Gaussian Splatting for Real-Time Radiance Field Rendering"
-  - "3D Gaussian Splatting as Markov Chain Monte Carlo"
-  # dynamic / 4D reconstruction
-  - "Shape of Motion: 4D Reconstruction from a Single Video"
-  - "4D Gaussian Splatting for Real-Time Dynamic Scene Rendering"
-  - "Real-time Photorealistic Dynamic Scene Representation and Rendering with 4D Gaussian Splatting"
-  - "SC-GS: Sparse-Controlled Gaussian Splatting for Editable Dynamic Scenes"
-  - "GP-4DGS: Probabilistic 4D Gaussian Splatting from Monocular Video via Variational Gaussian Processes"
-  # articulated / animatable
-  - "RigGS: Rigging of 3D Gaussians for Modeling Articulated Objects in Videos"
-  - "Template-free Articulated Gaussian Splatting for Real-time Reposable Dynamic View Synthesis"
-  - "3DGS-Avatar: Animatable Avatars via Deformable 3D Gaussian Splatting"
-  - "HumanNeRF: Free-viewpoint Rendering of Moving People from Monocular Video"
-  # world models
-  - "World Motion Models: Flexible Sequence Modeling of SE(3) Trajectories"
-  # video generation and world models
-  - "4Director: Controlling Video World Models with Rigid 3D Geometry"
-  - "MosaiChunk: Compositing Spatio-Temporal Memory for Autoregressive Video Generation"
-  - "LongTake: Learning to Sustain Dynamics in Long-Horizon Video Generation"
-  # efficient diffusion transformers and attention
-  - "Dynamics-Aware Sparse Attention for Efficient Autoregressive Video Diffusion"
-  - "RECAP: Reciprocal Sparse Attention and Hierarchical Caching for Efficient Video Diffusion"
-  - "HRoPE: Homography Relative Positional Encoding"
-  - "WorldRoPE: Probabilistic World-Centric Rotary Embedding for Multi-View Attention"
-
 # Papers you value for their field-wide importance rather than your topic: they teach the
 # IMPACT score what "everyone in CV / graphics / DL should read this" means to you.
-# Kept apart from seed_papers so they don't pull the relevance score away from your subfield.
+# Kept apart from your likes so they don't pull the relevance score away from your subfield.
 broad_examples:
   - "Adam: A Method for Stochastic Optimization"
   - "Attention Is All You Need"
@@ -151,7 +121,7 @@ feedback:
   # the scorer as positive examples. min_rating also sets what counts as a pick for the taste score.
   enabled: true
   min_rating: 4
-  max_examples: 30
+  max_examples: 50
 
 zotero:
   # Liked and bookmarked papers are pushed to your Zotero library (needs ZOTERO_API_KEY in .env).
