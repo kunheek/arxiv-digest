@@ -34,18 +34,18 @@ const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } ca
 function readState() {
   const h = location.hash.replace(/^#\/?/, ""), p = new URLSearchParams(h.replace(/^\?/, ""));
   return { d: p.get("d") || "", q: p.get("q") || "", min: p.get("min") || "0", sort: p.get("sort") || "",
-           w: p.get("w") === "1", c: p.get("c") === "1", a: p.get("a") === "1", s: p.get("s") === "1" };
+           w: p.get("w") === "1", c: p.get("c") === "1", a: p.get("a") === "1", s: p.get("s") === "1", l: p.get("l") === "1" };
 }
 function writeState(s, replace) {
   const p = new URLSearchParams();
   p.set("d", s.d);   // always set: "#/?d=" is all days, a bare "#/" means the latest day
   if (s.q) p.set("q", s.q); if (s.min !== "0") p.set("min", s.min);
-  if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.a) p.set("a", "1"); if (s.s) p.set("s", "1");
+  if (s.sort) p.set("sort", s.sort); if (s.w) p.set("w", "1"); if (s.c) p.set("c", "1"); if (s.a) p.set("a", "1"); if (s.s) p.set("s", "1"); if (s.l) p.set("l", "1");
   const url = "#/" + (p.toString() ? "?" + p : "");
   if (replace) history.replaceState(null, "", url); else location.hash = url;
 }
 const uiState = () => ({ d: $("#day").value, q: $("#q").value.trim(), min: $("#min").value,
-  sort: $("#sort").dataset.user ? $("#sort").value : "", w: $("#w").checked, c: $("#c").checked, a: $("#a").checked, s: $("#s").checked });
+  sort: $("#sort").dataset.user ? $("#sort").value : "", w: $("#w").checked, c: $("#c").checked, a: $("#a").checked, s: $("#s").checked, l: $("#l").checked });
 
 // ── data ───────────────────────────────────────────────────────────────
 const shard = (d) => (shards[d] ||= fetch(`data/d/${d}.json`).then((r) => r.json()).catch(() => ({})));
@@ -101,7 +101,7 @@ function matchTok(t, r, full) {
 async function compute(s) {
   const toks = parseQuery(s.q), min = +s.min;
   let cand = s.d ? byDate[s.d] || [] : DATA.papers;
-  cand = cand.filter((r) => r[3] >= min && (!s.w || r[6]) && (!s.c || r[7]) && (!s.s || saved.has(r[0])));
+  cand = cand.filter((r) => r[3] >= min && (!s.w || r[6]) && (!s.c || r[7]) && (!s.s || saved.has(r[0])) && (!s.l || liked.has(r[0])));
   const free = toks.filter((t) => t.k === "free" && !t.neg);
   cand = cand.filter((r) => toks.filter((t) => t.k !== "free").every((t) => matchTok(t, r)));
   freeTerms = free.map((t) => t.v);
@@ -330,7 +330,7 @@ function syncControls(s) {
   day.value = s.d; day.textContent = dayLabel(s.d); day.title = s.d ? dayInfo(s.d) : "Pick a day";
   $("#dprev").disabled = i < 0 || i === dates.length - 1; $("#dnext").disabled = i <= 0;
   closeCal(); $("#min").value = s.min; $("#q").value !== s.q && document.activeElement !== $("#q") && ($("#q").value = s.q);
-  $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#a").checked = s.a; $("#s").checked = s.s;
+  $("#sort").value = s.sort || (s.d ? "score" : "new"); $("#w").checked = s.w; $("#c").checked = s.c; $("#a").checked = s.a; $("#s").checked = s.s; $("#l").checked = s.l;
 }
 function setDensity(v) {
   document.body.className = "dens-" + v; store.set("dens", v);
@@ -339,7 +339,7 @@ function setDensity(v) {
 
 // ── events ─────────────────────────────────────────────────────────────
 const push = (replace) => { writeState(uiState(), replace); if (replace) view(true); };
-["min", "w", "c", "a", "s"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
+["min", "w", "c", "a", "s", "l"].forEach((id) => $("#" + id).addEventListener("change", () => push(false)));
 $("#sort").addEventListener("change", (e) => { e.target.dataset.user = 1; push(false); });
 $("#q").addEventListener("input", () => { clearTimeout(view.t); view.t = setTimeout(() => push(true), 200); });
 window.addEventListener("hashchange", () => { $("#sort").dataset.user = readState().sort ? 1 : ""; view(); });

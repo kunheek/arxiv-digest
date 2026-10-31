@@ -128,7 +128,7 @@ scripts/install.sh --serve --config config.kcvl.yaml --host 0.0.0.0   # http://<
 ### Ratings and bookmarks
 Rate papers 1–5 stars (press `1`–`5` on the selected row) and bookmark them with 🔖 (`b`).
 Like with ♥ (`l`). Liked, bookmarked and rated papers are protected from FIFO deletion. Search with `is:saved`,
-`is:liked`, `is:rated`, `rating>=4`, or the 🔖 saved checkbox. Likes, bookmarks and ratings ≥ `feedback.min_rating` become positive examples for scoring
+`is:liked`, `is:rated`, `rating>=4`, or the ♥ liked / 🔖 saved checkboxes. Likes, bookmarks and ratings ≥ `feedback.min_rating` become positive examples for scoring
 (a bookmark you rated lower doesn't).
 
 - **Only the local site (or `run.py --add`, below) can change them**; they're saved straight into the database.
