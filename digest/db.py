@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import hmac
 import json
 import os
+import re
+import secrets
 import sqlite3
 from dataclasses import asdict
 
@@ -51,6 +55,21 @@ CREATE TABLE IF NOT EXISTS explain_costs (
 CREATE TABLE IF NOT EXISTS visits (
   date TEXT NOT NULL, visitor TEXT NOT NULL, pages INTEGER DEFAULT 0, actions INTEGER DEFAULT 0,
   PRIMARY KEY (date, visitor)
+);
+CREATE TABLE IF NOT EXISTS users (
+  name TEXT PRIMARY KEY, pw TEXT NOT NULL, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY, user TEXT NOT NULL, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS user_ratings (
+  user TEXT NOT NULL, id TEXT NOT NULL, rating INTEGER NOT NULL, rated_at TEXT, PRIMARY KEY (user, id)
+);
+CREATE TABLE IF NOT EXISTS user_bookmarks (
+  user TEXT NOT NULL, id TEXT NOT NULL, saved_at TEXT, PRIMARY KEY (user, id)
+);
+CREATE TABLE IF NOT EXISTS user_likes (
+  user TEXT NOT NULL, id TEXT NOT NULL, liked_at TEXT, PRIMARY KEY (user, id)
 );
 """
 JSON_COLS = (
@@ -214,8 +233,15 @@ def import_ratings(con: sqlite3.Connection, path: str) -> int:
     return n
 
 
-def ratings(con: sqlite3.Connection) -> dict[str, int]:
-    return {r["id"]: r["rating"] for r in con.execute("SELECT id, rating FROM ratings")}
+def _picks(kind: str, user: str | None) -> tuple[str, str, tuple]:
+    """(table, WHERE clause, params) for "ratings" | "bookmarks" | "likes": the shared (lab)
+    picks when `user` is None, else that logged-in user's own (user_* tables, user column first)."""
+    return (f"user_{kind}", "user = ?", (user,)) if user else (kind, "1", ())
+
+
+def ratings(con: sqlite3.Connection, user: str | None = None) -> dict[str, int]:
+    t, w, p = _picks("ratings", user)
+    return {r["id"]: r["rating"] for r in con.execute(f"SELECT id, rating FROM {t} WHERE {w}", p)}
 
 
 def liked_titles(
@@ -237,55 +263,149 @@ def liked_titles(
     return [r["title"] for r in rows]
 
 
-def set_rating(con: sqlite3.Connection, pid: str, rating: int) -> None:
+def set_rating(con: sqlite3.Connection, pid: str, rating: int, user: str | None = None) -> None:
+    t, w, p = _picks("ratings", user)
     with con:
         if rating <= 0:
-            con.execute("DELETE FROM ratings WHERE id=?", (pid,))
+            con.execute(f"DELETE FROM {t} WHERE {w} AND id=?", p + (pid,))
         elif rating <= 5:
             con.execute(
-                "INSERT OR REPLACE INTO ratings VALUES (?,?,?)",
-                (pid, rating, dt.date.today().isoformat()),
+                f"INSERT OR REPLACE INTO {t} VALUES ({'?,' * len(p)}?,?,?)",
+                p + (pid, rating, dt.date.today().isoformat()),
             )
 
 
-def set_bookmark(con: sqlite3.Connection, pid: str, on: bool) -> None:
+def _set_pick(con: sqlite3.Connection, kind: str, pid: str, on: bool, user: str | None) -> None:
+    t, w, p = _picks(kind, user)
     with con:
         if on:
             con.execute(
-                "INSERT OR IGNORE INTO bookmarks VALUES (?,?)",
-                (pid, dt.date.today().isoformat()),
+                f"INSERT OR IGNORE INTO {t} VALUES ({'?,' * len(p)}?,?)",
+                p + (pid, dt.date.today().isoformat()),
             )
         else:
-            con.execute("DELETE FROM bookmarks WHERE id=?", (pid,))
+            con.execute(f"DELETE FROM {t} WHERE {w} AND id=?", p + (pid,))
 
 
-def set_like(con: sqlite3.Connection, pid: str, on: bool) -> None:
+def set_bookmark(con: sqlite3.Connection, pid: str, on: bool, user: str | None = None) -> None:
+    _set_pick(con, "bookmarks", pid, on, user)
+
+
+def set_like(con: sqlite3.Connection, pid: str, on: bool, user: str | None = None) -> None:
+    _set_pick(con, "likes", pid, on, user)
+
+
+def likes(con: sqlite3.Connection, user: str | None = None) -> list[str]:
+    t, w, p = _picks("likes", user)
+    return [r["id"] for r in con.execute(f"SELECT id FROM {t} WHERE {w}", p)]
+
+
+def bookmarks(con: sqlite3.Connection, user: str | None = None) -> list[str]:
+    t, w, p = _picks("bookmarks", user)
+    return [r["id"] for r in con.execute(f"SELECT id FROM {t} WHERE {w}", p)]
+
+
+# ── accounts (delivery.login) ────────────────────────────────────────────
+# Logged out, picks are the lab's shared ones (tables ratings/likes/bookmarks); logged in, they
+# are the user's own (user_* tables). Passwords are salted PBKDF2 hashes; a session cookie
+# holds a random token, of which only the SHA-256 is stored.
+_NAME = re.compile(r"[a-z0-9][a-z0-9_.-]{0,31}")
+MIN_PASSWORD = 6
+
+
+def _hash_pw(pw: str, salt: bytes | None = None) -> str:
+    salt = salt or secrets.token_bytes(16)
+    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
+    return f"pbkdf2${salt.hex()}${h.hex()}"
+
+
+def _check_pw(pw: str, stored: str) -> bool:
+    _, salt, _h = stored.split("$")
+    return hmac.compare_digest(_hash_pw(pw, bytes.fromhex(salt)), stored)
+
+
+def _valid_password(pw: str) -> None:
+    if len(pw) < MIN_PASSWORD:
+        raise ValueError(f"password must be at least {MIN_PASSWORD} characters")
+
+
+def add_user(con: sqlite3.Connection, name: str, pw: str) -> str:
+    """Create an account; returns the name as stored (lower case). ValueError if it's taken or bad."""
+    name = name.strip().lower()
+    if not _NAME.fullmatch(name):
+        raise ValueError("name: 1–32 letters, digits, '.', '_' or '-'")
+    _valid_password(pw)
+    try:
+        with con:
+            con.execute("INSERT INTO users VALUES (?,?,?)", (name, _hash_pw(pw), _now()))
+    except sqlite3.IntegrityError:
+        raise ValueError(f"the name {name!r} is taken") from None
+    return name
+
+
+def check_password(con: sqlite3.Connection, name: str, pw: str) -> str | None:
+    """The user's name if the password is right, else None."""
+    name = name.strip().lower()
+    r = con.execute("SELECT pw FROM users WHERE name = ?", (name,)).fetchone()
+    return name if r and _check_pw(pw, r["pw"]) else None
+
+
+def set_password(con: sqlite3.Connection, name: str, pw: str) -> None:
+    """Reset a password (run.py --set-password); logs the user out everywhere."""
+    _valid_password(pw)
     with con:
-        if on:
-            con.execute(
-                "INSERT OR IGNORE INTO likes VALUES (?,?)",
-                (pid, dt.date.today().isoformat()),
-            )
-        else:
-            con.execute("DELETE FROM likes WHERE id=?", (pid,))
+        if not con.execute("UPDATE users SET pw = ? WHERE name = ?", (_hash_pw(pw), name)).rowcount:
+            raise ValueError(f"no user {name!r}")
+        con.execute("DELETE FROM sessions WHERE user = ?", (name,))
 
 
-def likes(con: sqlite3.Connection) -> list[str]:
-    return [r["id"] for r in con.execute("SELECT id FROM likes")]
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
-def bookmarks(con: sqlite3.Connection) -> list[str]:
-    return [r["id"] for r in con.execute("SELECT id FROM bookmarks")]
+def new_session(con: sqlite3.Connection, name: str) -> str:
+    token = secrets.token_urlsafe(32)
+    with con:
+        con.execute("INSERT INTO sessions VALUES (?,?,?)", (_token_hash(token), name, _now()))
+    return token
+
+
+def session_user(con: sqlite3.Connection, token: str) -> str | None:
+    if not token:
+        return None
+    r = con.execute("SELECT user FROM sessions WHERE token = ?", (_token_hash(token),)).fetchone()
+    return r["user"] if r else None
+
+
+def end_session(con: sqlite3.Connection, token: str) -> None:
+    with con:
+        con.execute("DELETE FROM sessions WHERE token = ?", (_token_hash(token),))
+
+
+def user_report(con: sqlite3.Connection) -> str:
+    rows = con.execute(
+        "SELECT u.name, u.created_at,"
+        " (SELECT COUNT(*) FROM user_ratings WHERE user = u.name),"
+        " (SELECT COUNT(*) FROM user_likes WHERE user = u.name),"
+        " (SELECT COUNT(*) FROM user_bookmarks WHERE user = u.name)"
+        " FROM users u ORDER BY u.created_at"
+    ).fetchall()
+    if not rows:
+        return "no accounts yet"
+    out = ["name                              created              rated  liked  saved"]
+    out += [f"{n:32s}  {(c or '')[:19]:19s}  {r:5d}  {l:5d}  {b:5d}" for n, c, r, l, b in rows]
+    return "\n".join(out)
 
 
 def prune(con: sqlite3.Connection, max_papers: int) -> int:
     """Keep at most `max_papers` papers, deleting the oldest first (FIFO by date).
-    Papers you rated, liked, bookmarked or had explained are never deleted and don't count
+    Papers anyone rated, liked, bookmarked (shared or in an account) or had explained are never deleted and don't count
     toward the limit."""
     if not max_papers or max_papers <= 0:
         return 0
     special = ("id IN (SELECT id FROM ratings UNION SELECT id FROM bookmarks UNION SELECT id FROM likes"
-               " UNION SELECT id FROM explanations WHERE status = 'done')")
+               " UNION SELECT id FROM user_ratings UNION SELECT id FROM user_bookmarks"
+               " UNION SELECT id FROM user_likes UNION SELECT id FROM explanations WHERE status = 'done')")
     n = con.execute(f"SELECT COUNT(*) FROM papers WHERE NOT ({special})").fetchone()[0]
     excess = n - max_papers
     if excess <= 0:
@@ -364,8 +484,6 @@ def log_visit(con: sqlite3.Connection, ip: str, action: bool = False) -> None:
     """Count a page load (or a rating/like/bookmark/explain click) by this visitor today (KST).
     Only a salted hash of the IP is kept: enough to count distinct visitors, not to list them.
     The salt lives in this database, so hashes can't be matched across databases."""
-    import hashlib
-    import secrets
     from zoneinfo import ZoneInfo
 
     with con:

@@ -1,5 +1,5 @@
-:root{--ctl:1.9rem;--bg:#f6f7f9;--surface:#fff;--fg:#1b2130;--mute:#6b7487;--line:#e3e6ec;--acc:#3b5bdb;--accbg:#edf1ff;--hi:#12805c;--hibg:#e3f6ee;--mid:#3b5bdb;--midbg:#edf1ff;--lo:#6b7487;--lobg:#eef0f4;--star:#b7791f;--starbg:#fff4de;--hl:#fff3a3;--row:#fff;--hover:#f1f4ff}
-@media (prefers-color-scheme:dark){:root{--bg:#0f121a;--surface:#171b26;--fg:#e8ebf2;--mute:#9099ad;--line:#2a3040;--acc:#8ea8ff;--accbg:#222a45;--hi:#4cc994;--hibg:#16342a;--mid:#8ea8ff;--midbg:#222a45;--lo:#9099ad;--lobg:#232838;--star:#f0b95a;--starbg:#3a2f18;--hl:#5a4d10;--row:#171b26;--hover:#1e2433}}
+:root{--ctl:1.9rem;--bg:#f6f7f9;--surface:#fff;--fg:#1b2130;--mute:#6b7487;--line:#e3e6ec;--acc:#3b5bdb;--accbg:#edf1ff;--hi:#12805c;--hibg:#e3f6ee;--mid:#3b5bdb;--midbg:#edf1ff;--lo:#6b7487;--lobg:#eef0f4;--star:#b7791f;--starbg:#fff4de;--hl:#fff3a3;--row:#fff;--hover:#f1f4ff;--err:#c0392b}
+@media (prefers-color-scheme:dark){:root{--bg:#0f121a;--surface:#171b26;--fg:#e8ebf2;--mute:#9099ad;--line:#2a3040;--acc:#8ea8ff;--accbg:#222a45;--hi:#4cc994;--hibg:#16342a;--mid:#8ea8ff;--midbg:#222a45;--lo:#9099ad;--lobg:#232838;--star:#f0b95a;--starbg:#3a2f18;--hl:#5a4d10;--row:#171b26;--hover:#1e2433;--err:#ff8a80}}
 *{box-sizing:border-box}
 html{color-scheme:light dark}
 body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
@@ -103,6 +103,13 @@ dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface)
 #bibbox{width:min(46rem,calc(100vw - 2rem));max-width:none;box-sizing:border-box}
 #bibtext{display:block;width:100%;box-sizing:border-box;margin:.5rem 0 .8rem;font:.8rem/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:.5rem .6rem;resize:vertical;white-space:pre;overflow:auto}
 dialog::backdrop{background:rgba(0,0,0,.4)}
+#acct{max-width:9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#acct.on{background:var(--accbg);border-color:var(--acc);color:var(--acc)}
+#loginbox{width:min(26rem,calc(100vw - 2rem));max-width:none;box-sizing:border-box;font-size:.88rem;line-height:1.5}
+#loginbox label{display:block;margin:.5rem 0}
+#loginbox input{display:block;width:100%;box-sizing:border-box;font:inherit;padding:.35rem .5rem;margin-top:.2rem;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg)}
+#loginbox .row{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
+#loginbox .err{color:var(--err);min-height:1.2em;margin:.2rem 0}
 #about{font-style:italic;font-family:Georgia,serif;font-weight:700;width:1.9rem;padding:.25rem 0}
 #aboutbox{width:min(40rem,calc(100vw - 2rem));max-width:none;box-sizing:border-box;font-size:.88rem;line-height:1.5}
 #aboutbox h2{margin-top:.8rem}#aboutbox ol{padding-left:1.3rem;margin:.3rem 0}#aboutbox li{margin:.25rem 0}

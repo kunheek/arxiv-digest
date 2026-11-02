@@ -16,6 +16,8 @@ import os
 import re
 import sqlite3
 import threading
+import time
+from http.cookies import CookieError, SimpleCookie
 
 from . import db, site
 
@@ -135,9 +137,12 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
         return db.get_explanation(con, pid), 202
 
     min_rating = cfg.get("feedback", {}).get("min_rating", 4)
+    login_on = bool(cfg.get("delivery", {}).get("login"))  # accounts with picks of their own
     cache = _Cache(db_path)
     vectors = None  # embed.Cache, created on first use (numpy/fastembed import is lazy)
-    taste = {"lock": threading.Lock(), "key": None, "body": b""}
+    # taste scores keyed by (vectors, picks): the lab's shared picks serve every logged-out
+    # visitor, and each account gets its own entry
+    tastes, taste_lock = _Lru(64), threading.Lock()
     days = _Lru(64)  # built day files (~0.5 MB gzipped each), so a popular day is built once
     about = site.about_html(cfg) if cfg.get("delivery", {}).get("about") else ""
     page = site.page_html(title, local=True, about=about).encode()
@@ -146,7 +151,7 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
         def log_message(self, *a):  # quiet
             pass
 
-        def _send(self, body: bytes, ctype: str, gz: bool = False, code: int = 200, etag: str = ""):
+        def _send(self, body: bytes, ctype: str, gz: bool = False, code: int = 200, etag: str = "", cookie: str = ""):
             if etag and etag in self.headers.get("If-None-Match", ""):
                 self.send_response(304)  # the browser's copy is current: no body
                 self.send_header("ETag", etag)
@@ -160,6 +165,8 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                 self.send_header("ETag", etag)
             if gz:
                 self.send_header("Content-Encoding", "gzip")
+            if cookie:
+                self.send_header("Set-Cookie", cookie)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -179,8 +186,47 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
             except sqlite3.Error:
                 pass
 
-        def _json(self, obj, code: int = 200):
-            self._send(json.dumps(obj).encode(), "application/json", code=code)
+        def _json(self, obj, code: int = 200, cookie: str = ""):
+            self._send(json.dumps(obj).encode(), "application/json", code=code, cookie=cookie)
+
+        def _token(self) -> str:
+            try:
+                c = SimpleCookie(self.headers.get("Cookie", ""))
+            except CookieError:
+                return ""
+            return c["session"].value if "session" in c else ""
+
+        def _user(self, con) -> str | None:
+            """The logged-in account, or None: the lab's shared picks."""
+            return db.session_user(con, self._token()) if login_on else None
+
+        def _account(self, body: dict):
+            """POST /api/signup, /api/login, /api/logout {name, password}."""
+            if not login_on:
+                return self._json({"error": "accounts are off here (delivery.login)"}, 404)
+            con = db.connect(db_path)
+            try:
+                if self.path == "/api/logout":
+                    db.end_session(con, self._token())
+                    return self._json({"ok": True}, cookie="session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
+                name, pw = str(body.get("name", "")), str(body.get("password", ""))
+                if self.path == "/api/signup":
+                    try:
+                        name = db.add_user(con, name, pw)
+                    except ValueError as e:
+                        return self._json({"error": str(e)}, 400)
+                else:
+                    name = db.check_password(con, name, pw)
+                    if not name:
+                        time.sleep(1)  # slows down password guessing
+                        return self._json({"error": "wrong name or password"}, 403)
+                token = db.new_session(con, name)
+                return self._json(
+                    {"ok": True, "user": name},
+                    cookie=f"session={token}; Path=/; Max-Age={400 * 86400}; HttpOnly; SameSite=Lax",
+                )
+            finally:
+                con.close()
 
         def do_GET(self):
             nonlocal vectors
@@ -212,9 +258,11 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
             if path == "/api/state":
                 con = db.connect(db_path)
                 try:
+                    user = self._user(con)
                     return self._json(
-                        {"ratings": db.ratings(con), "bookmarks": db.bookmarks(con), "likes": db.likes(con),
-                         "explained": db.explained(con), "explain_on": can_explain}
+                        {"ratings": db.ratings(con, user), "bookmarks": db.bookmarks(con, user),
+                         "likes": db.likes(con, user), "explained": db.explained(con), "explain_on": can_explain,
+                         "login_on": login_on, "user": user or ""}
                     )
                 finally:
                     con.close()
@@ -238,14 +286,15 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                     try:
                         ix = vectors.get(con)
                         if path == "/api/taste":
-                            # everyone shares the picks, so one result serves every visitor
-                            # until a pick or a new day's vectors change it
-                            key = (vectors.stamp, embed.reference_ids(con, min_rating))
-                            with taste["lock"]:
-                                if taste["key"] != key:
-                                    scores = embed.taste_scores(con, ix, min_rating=min_rating)
-                                    taste.update(key=key, body=json.dumps(scores).encode())
-                                body = taste["body"]
+                            # recomputed only when a pick or a new day's vectors change it
+                            user = self._user(con)
+                            pos, neg = embed.reference_ids(con, min_rating, user)
+                            key = (vectors.stamp, tuple(pos), tuple(neg))
+                            with taste_lock:
+                                body = tastes.get(key)
+                                if body is None:
+                                    scores = embed.taste_scores(con, ix, min_rating=min_rating, user=user)
+                                    body = tastes.put(key, json.dumps(scores).encode())
                             return self._send(body, "application/json")
                         pid = q.get("id", [""])[0]
                         return self._json(
@@ -267,6 +316,10 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
             try:
                 n = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(n) or b"{}")
+                if not isinstance(body, dict):
+                    raise ValueError("expected a JSON object")
+                if self.path in ("/api/signup", "/api/login", "/api/logout"):
+                    return self._account(body)
                 pid = str(body["id"])
                 if not re.fullmatch(r"\d{4}\.\d{4,5}|[a-z.\-]+/\d{7}", pid):
                     raise ValueError("bad id")
@@ -277,12 +330,14 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                         if code in (200, 202):
                             self._visit(action=True)
                         return self._json(body, code)
+                    user = self._user(con)
                     if self.path == "/api/rating":
-                        db.set_rating(con, pid, int(body.get("rating", 0)))
+                        db.set_rating(con, pid, int(body.get("rating", 0)), user)
                     elif self.path in ("/api/like", "/api/bookmark"):
                         on = bool(body.get("on"))
-                        (db.set_like if self.path == "/api/like" else db.set_bookmark)(con, pid, on)
-                        if on:  # un-liking never deletes from Zotero (you may have annotated it)
+                        (db.set_like if self.path == "/api/like" else db.set_bookmark)(con, pid, on, user)
+                        # shared picks only; un-liking never deletes from Zotero (you may have annotated it)
+                        if on and user is None:
                             threading.Thread(
                                 target=_push_to_zotero, args=(db_path, pid, cfg), daemon=True
                             ).start()
@@ -292,7 +347,7 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                     con.close()
                 self._visit(action=True)
                 self._json({"ok": True})
-            except (KeyError, ValueError, json.JSONDecodeError) as e:
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as e:
                 self._json({"error": str(e)}, 400)
             except sqlite3.OperationalError as e:  # still locked after db.connect's 30 s wait
                 self._json({"error": f"database busy, try again ({e})"}, 503)

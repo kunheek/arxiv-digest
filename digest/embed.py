@@ -12,6 +12,8 @@ import threading
 
 import numpy as np
 
+from . import db
+
 MODEL = "BAAI/bge-small-en-v1.5"  # 384-d, ~130 MB, ~300 papers/s on a CPU
 _model = None
 
@@ -115,23 +117,25 @@ def _taste_loo(ix: Index, cand: list[str], pos: list[str], neg: list[str]) -> np
     return raw
 
 
-def reference_ids(con: sqlite3.Connection, min_rating: int = 4) -> tuple[list[str], list[str]]:
-    """(positives, negatives): liked ∪ bookmarked ∪ rated ≥ min_rating; rated ≤ 2."""
-    pos = {r[0] for r in con.execute(
-        "SELECT id FROM likes UNION SELECT id FROM bookmarks UNION SELECT id FROM ratings WHERE rating >= ?",
-        (min_rating,))}
-    neg = {r[0] for r in con.execute("SELECT id FROM ratings WHERE rating <= 2")} - pos
+def reference_ids(
+    con: sqlite3.Connection, min_rating: int = 4, user: str | None = None
+) -> tuple[list[str], list[str]]:
+    """(positives, negatives): liked ∪ bookmarked ∪ rated ≥ min_rating; rated ≤ 2.
+    The lab's shared picks, or a logged-in `user`'s own."""
+    rated = db.ratings(con, user)
+    pos = set(db.likes(con, user)) | set(db.bookmarks(con, user)) | {i for i, r in rated.items() if r >= min_rating}
+    neg = {i for i, r in rated.items() if r <= 2} - pos
     return sorted(pos), sorted(neg)
 
 
 def taste_scores(
     con: sqlite3.Connection, index: Index | None = None, days: int = 60,
-    min_positives: int = 3, min_rating: int = 4,
+    min_positives: int = 3, min_rating: int = 4, user: str | None = None,
 ) -> dict[str, float]:
     """0–10 taste score (percentile among recent papers) for papers of the last `days` days.
-    Empty until you have `min_positives` picks."""
+    Empty until there are `min_positives` picks (the lab's, or `user`'s own)."""
     ix = index or Index(con)
-    pos, neg = reference_ids(con, min_rating)
+    pos, neg = reference_ids(con, min_rating, user)
     pos = [i for i in pos if i in ix.pos]
     if len(pos) < min_positives or not ix.ids:
         return {}

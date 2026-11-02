@@ -14,6 +14,7 @@
     <input id="q" type="search" placeholder="Search…  au:kanazawa  tag:&quot;world models&quot;  score>=7  -nerf   ( / )" autocomplete="off" spellcheck="false" aria-label="Search">
     <button id="help" class="btn" title="Search syntax and shortcuts">?</button>
     <button id="about" class="btn" title="About this digest  ( i )" aria-label="About this digest" hidden>i</button>
+    <button id="acct" class="btn" hidden>Log in</button>
   </div>
   <div class="tools">
     <div class="daynav" role="group" aria-label="Day"><button id="dprev" title="Older day  ( [ )" aria-label="Older day">‹</button><button id="day" value="" aria-haspopup="dialog" aria-expanded="false" title="Pick a day"></button><button id="dnext" title="Newer day  ( ] )" aria-label="Newer day">›</button></div>
@@ -61,6 +62,22 @@
   <h2>BibTeX <span class="qn" id="bibmsg"></span></h2>
   <textarea id="bibtext" readonly spellcheck="false"></textarea>
   <form method="dialog"><button class="btn">Close</button></form>
+</dialog>
+<dialog id="loginbox">
+  <form id="loginform">
+    <h2>Log in</h2>
+    <p>Logged out, ratings, likes and bookmarks are shared by the whole lab. Log in to keep your own, and to rank papers <i>for you ♥</i> by them.</p>
+    <label>Name <input id="lname" autocomplete="username" maxlength="32" required spellcheck="false" autocapitalize="off"></label>
+    <label>Password <input id="lpw" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="lerr" role="alert"></p>
+    <div class="row"><button class="btn" data-how="login">Log in</button><button class="btn" data-how="signup">Create account</button><button class="btn" type="button" data-how="cancel">Cancel</button></div>
+    <p class="qn">New here? Pick a name and a password (6+ characters), then <b>Create account</b>. This site is plain HTTP, so don't reuse a password from elsewhere.</p>
+  </form>
+  <div id="loggedin" hidden>
+    <h2>Logged in as <span id="lwho"></span></h2>
+    <p>Your ratings, likes and bookmarks are your own, and <i>for you ♥</i> ranks papers by them. Log out to see the lab's shared picks again.</p>
+    <div class="row"><button class="btn" id="logout">Log out</button><button class="btn" type="button" data-how="cancel">Close</button></div>
+  </div>
 </dialog>
 {{ABOUT}}
 <script src="app.js"></script>

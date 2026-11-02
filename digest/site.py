@@ -150,12 +150,15 @@ def about_html(cfg: dict) -> str:
         f"watchlist bonus. Papers with impact ≥ {rk.get('impact_min', 7)} (📌) stay near the top "
         "whatever their topic.",
     ]
+    login = cfg.get("delivery", {}).get("login")
     if fb.get("enabled"):
         steps.append(
-            "<b>Learn.</b> Ratings, likes and bookmarks are shared by everyone here. Papers rated "
-            f"{fb.get('min_rating', 4)}★ or more, liked or bookmarked (up to "
+            "<b>Learn.</b> Ratings, likes and bookmarks are shared by everyone here"
+            + (" unless you log in (top right) to keep your own" if login else "")
+            + f". The shared ones rated {fb.get('min_rating', 4)}★ or more, liked or bookmarked (up to "
             f"{fb.get('max_examples', 30)}) are shown to the scorer as examples of the lab's taste "
-            "from the next day on, and <i>for you ♥</i> sorts by similarity to them."
+            "from the next day on, and <i>for you ♥</i> sorts by similarity to them"
+            + (" (to your own picks when you're logged in; they don't change the scores)." if login else ".")
         )
     if xp.get("enabled", True):
         budget = xp.get("daily_budget_usd", 5)

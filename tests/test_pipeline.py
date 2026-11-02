@@ -480,6 +480,7 @@ def test_local_server_serves_everything_and_saves_state(tmp_path):
         post("/api/like", {"id": "2610.0002", "on": True})
         st = json.loads(urllib.request.urlopen(base + "/api/state").read())
         assert st.pop("explained") == [] and st.pop("explain_on") in (True, False)
+        assert st.pop("login_on") is False and st.pop("user") == ""
         assert st == {"ratings": {"2610.0002": 5}, "bookmarks": ["2610.0001"], "likes": ["2610.0002"]}
         assert b"app.js" in urllib.request.urlopen(base + "/").read()
         assert urllib.request.urlopen(base + "/app.js").status == 200
@@ -1021,6 +1022,123 @@ def test_server_counts_visitors_without_keeping_ips(tmp_path):
     assert "127.0.0.1" not in stored and "100.64" not in stored
     report = db.visit_report(con)
     assert "2 distinct visitors" in report
+
+
+def test_login_keeps_picks_personal_and_logged_out_picks_shared(tmp_path):
+    import http.server
+    import threading
+    import urllib.error
+    import urllib.request
+    from digest import db, serve
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    db.upsert(con, [_paper("2610.0001"), _paper("2610.0002")], "2026-10-16")
+    con.close()
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T", {"delivery": {"login": True}}))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+
+    def call(p, body=None, cookie=""):
+        req = urllib.request.Request(base + p, json.dumps(body).encode() if body is not None else None,
+                                     {"Content-Type": "application/json", "Cookie": cookie})
+        try:
+            with urllib.request.urlopen(req) as r:
+                return r.status, json.loads(r.read()), r.headers.get("Set-Cookie", "")
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read()), ""
+
+    try:
+        call("/api/like", {"id": "2610.0001", "on": True})                       # logged out: the lab's
+        code, j, ck = call("/api/signup", {"name": "Alice", "password": "secret1"})
+        assert code == 200 and j["user"] == "alice" and "HttpOnly" in ck
+        alice = ck.split(";")[0]
+        assert call("/api/signup", {"name": "alice", "password": "secret2"})[0] == 400   # taken
+        assert call("/api/signup", {"name": "bob", "password": "123"})[0] == 400         # too short
+        call("/api/bookmark", {"id": "2610.0002", "on": True}, alice)
+        call("/api/rating", {"id": "2610.0002", "rating": 5}, alice)
+        _, st, _ = call("/api/state", cookie=alice)
+        assert st["user"] == "alice" and st["likes"] == [] and st["bookmarks"] == ["2610.0002"]
+        assert st["ratings"] == {"2610.0002": 5}
+        _, st, _ = call("/api/state")
+        assert st["user"] == "" and st["login_on"] and st["likes"] == ["2610.0001"] and st["bookmarks"] == []
+        assert call("/api/login", {"name": "alice", "password": "nope00"})[0] == 403
+        code, _, ck = call("/api/login", {"name": "ALICE", "password": "secret1"})
+        assert code == 200 and ck.startswith("session=")
+        call("/api/logout", {}, alice)
+        _, st, _ = call("/api/state", cookie=alice)                               # that session is gone
+        assert st["user"] == "" and st["likes"] == ["2610.0001"]
+    finally:
+        httpd.shutdown()
+    con = db.connect(path)
+    assert db.liked_titles(con) == [db.get_paper(con, "2610.0001")["title"]]   # the scorer sees shared picks only
+    assert "alice" in db.user_report(con)
+    stored = " ".join(r[0] for r in con.execute("SELECT pw FROM users"))
+    assert "secret1" not in stored
+    db.set_password(con, "alice", "newpass")
+    assert db.check_password(con, "alice", "newpass") == "alice" and not db.check_password(con, "alice", "secret1")
+    assert con.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0      # reset logs out everywhere
+    # pruning never drops a paper someone saved in their own account
+    db.upsert(con, [_paper("2610.0003")], "2026-10-17")
+    db.prune(con, 1)
+    assert db.get_paper(con, "2610.0002") and db.get_paper(con, "2610.0001")
+
+
+def test_taste_follows_the_lab_or_the_logged_in_user(tmp_path):
+    import http.server
+    import threading
+    import urllib.request
+    import numpy as np
+    from digest import db, serve
+    path = str(tmp_path / "d.db")
+    con = db.connect(path)
+    ids = [f"2610.000{i}" for i in range(8)]
+    db.upsert(con, [_paper(i) for i in ids], "2026-10-16")
+    rng = np.random.default_rng(0)
+    for i in ids:
+        v = rng.normal(size=384).astype(np.float32)
+        con.execute("INSERT INTO vectors VALUES (?,?)", (i, (v / np.linalg.norm(v)).astype(np.float16).tobytes()))
+    con.commit()
+    for i in ids[:3]:
+        db.set_like(con, i, True)                      # the lab's picks
+    alice = db.add_user(con, "alice", "secret1")
+    for i in ids[4:7]:
+        db.set_bookmark(con, i, True, alice)           # alice's own
+    token = db.new_session(con, alice)
+    con.close()
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T", {"delivery": {"login": True}}))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    get = lambda c="": json.loads(urllib.request.urlopen(urllib.request.Request(
+        base + "/api/taste", headers={"Cookie": c})).read())
+    try:
+        lab, mine = get(), get(f"session={token}")
+        assert get() == lab                            # served from the cache
+    finally:
+        httpd.shutdown()
+    assert len(lab) == len(mine) == 8 and lab != mine
+
+
+def test_accounts_are_off_unless_configured(tmp_path):
+    import http.server
+    import threading
+    import urllib.error
+    import urllib.request
+    from digest import db, serve
+    path = str(tmp_path / "d.db")
+    db.connect(path).close()
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), serve.make_handler(path, "T", {}))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+    try:
+        req = urllib.request.Request(base + "/api/signup", b'{"name":"a","password":"secret1"}',
+                                     {"Content-Type": "application/json"})
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req)
+        assert e.value.code == 404
+        st = json.loads(urllib.request.urlopen(base + "/api/state").read())
+        assert st["login_on"] is False and st["user"] == ""
+    finally:
+        httpd.shutdown()
 
 
 ATOM_FEED = """<?xml version="1.0" encoding="UTF-8"?>

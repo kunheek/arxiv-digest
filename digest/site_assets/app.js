@@ -345,6 +345,33 @@ const updatedHTML = () => {
   const f = t.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
   return `<span class="upd" title="Last time new papers were added">Updated ${esc(f)}</span>`;
 };
+// Accounts (delivery.login): logged out, picks are the lab's shared ones; logged in, they are
+// the user's own (the server keys them to the session cookie, so nothing else changes here).
+let USER = "";
+function showAccount() {
+  const b = $("#acct");
+  b.hidden = false;
+  b.textContent = USER || "Log in";
+  b.classList.toggle("on", !!USER);
+  b.title = USER ? `Logged in as ${USER}: your picks are your own` : "Log in for your own bookmarks and ranking";
+}
+$("#acct").onclick = () => {
+  $("#loginform").hidden = !!USER; $("#loggedin").hidden = !USER;
+  $("#lwho").textContent = USER; $("#lerr").textContent = "";
+  $("#loginbox").showModal();
+};
+$("#loginbox").addEventListener("keydown", (e) => e.stopPropagation());  // typing a name isn't a shortcut
+$("#loginbox").addEventListener("click", (e) => { if (e.target.dataset.how === "cancel") $("#loginbox").close(); });
+$("#loginform").onsubmit = async (e) => {
+  e.preventDefault();
+  const how = e.submitter?.dataset.how === "signup" ? "signup" : "login";
+  const r = await fetch("api/" + how, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: $("#lname").value.trim(), password: $("#lpw").value }) }).catch(() => null);
+  const j = r ? await r.json().catch(() => ({})) : { error: "can't reach the server" };
+  if (r && r.ok) location.reload(); else $("#lerr").textContent = j.error || "failed";
+};
+$("#logout").onclick = () => fetch("api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+  .then(() => location.reload());
 // "About this digest" (delivery.about): shown once on a visitor's first visit, then from ⓘ or i
 const about = () => { const d = $("#aboutbox"); if (d && !d.open) d.showModal(); };
 if ($("#aboutbox")) {
@@ -502,7 +529,9 @@ setDensity(store.get("dens", "compact"));
 fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then((st) => {
   if (st && st.ratings) { LOCAL = true;
     refreshTaste(); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local";
-    explained = new Set(st.explained || []); EXPLAIN_ON = !!st.explain_on; return; }
+    explained = new Set(st.explained || []); EXPLAIN_ON = !!st.explain_on;
+    if (st.login_on) { USER = st.user || ""; showAccount(); }
+    return; }
   document.body.classList.add("ro");  // public site: read-only mirror of the local picks
   return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((pf) => { if (pf) { ratings = pf.ratings || {}; saved = new Set(pf.bookmarks || []); liked = new Set(pf.likes || []); explained = new Set(pf.explained || []); } });

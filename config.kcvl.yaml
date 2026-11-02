@@ -125,7 +125,8 @@ explain:
 
 feedback:
   # Ratings, likes and bookmarks on the lab server come from everyone using it, so this
-  # learns the lab's shared taste.
+  # learns the lab's shared taste. Picks made while logged in (delivery.login) stay personal
+  # and don't feed the scorer.
   enabled: true
   min_rating: 4
   max_examples: 40
@@ -145,3 +146,4 @@ delivery:
   publish_branch: gh-pages   # not used
   site_title: KCVL arXiv digest
   about: true                # ⓘ "About this digest" on the site, shown on a visitor's first visit
+  login: true                # optional accounts: logged in, ratings/likes/bookmarks and "for you ♥" are your own
