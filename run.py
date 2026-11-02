@@ -16,7 +16,6 @@ Free modes (no arXiv, no Claude):
   python run.py --add ID [ID ...] [--like|--bookmark]  # add any arXiv paper (unscored) to the DB
   python run.py --visits [DAYS]              # visitors to the local site per day (default 30)
   python run.py --users                      # accounts on the local site (delivery.login)
-  python run.py --set-password NAME          # reset an account's password (asks for it)
 """
 
 from __future__ import annotations
@@ -151,7 +150,6 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         help="visitors to the local site (run.py --serve) per day, last DAYS days (default 30)",
     )
     ap.add_argument("--users", action="store_true", help="list accounts on the local site (delivery.login)")
-    ap.add_argument("--set-password", metavar="NAME", help="reset an account's password (prompts for the new one)")
     ap.add_argument("--embed-backfill", action="store_true", help="embed all papers lacking a vector")
     ap.add_argument("--eval-taste", action="store_true", help="compare Sonnet's score with the embedding taste score")
     ap.add_argument("--zotero-sync", action="store_true", help="push liked/bookmarked papers to Zotero")
@@ -190,18 +188,6 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
         return 0
     if args.users:
         print(db.user_report(db.connect(args.db)))
-        return 0
-    if args.set_password:
-        import getpass
-
-        pw = getpass.getpass(f"new password for {args.set_password}: ")
-        if pw != getpass.getpass("again: "):
-            sys.exit("passwords differ; nothing changed")
-        try:
-            db.set_password(db.connect(args.db), args.set_password.lower(), pw)
-        except ValueError as e:
-            sys.exit(str(e))
-        print(f"password reset; {args.set_password} is logged out everywhere")
         return 0
     if args.embed_backfill or args.eval_taste:
         from digest import embed

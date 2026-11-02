@@ -16,7 +16,6 @@ import os
 import re
 import sqlite3
 import threading
-import time
 from http.cookies import CookieError, SimpleCookie
 
 from . import db, site
@@ -189,44 +188,31 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
         def _json(self, obj, code: int = 200, cookie: str = ""):
             self._send(json.dumps(obj).encode(), "application/json", code=code, cookie=cookie)
 
-        def _token(self) -> str:
+        def _cookie_user(self) -> str:
             try:
                 c = SimpleCookie(self.headers.get("Cookie", ""))
             except CookieError:
                 return ""
-            return c["session"].value if "session" in c else ""
+            return c["user"].value if "user" in c else ""
 
         def _user(self, con) -> str | None:
             """The logged-in account, or None: the lab's shared picks."""
-            return db.session_user(con, self._token()) if login_on else None
+            return db.known_user(con, self._cookie_user()) if login_on else None
 
         def _account(self, body: dict):
-            """POST /api/signup, /api/login, /api/logout {name, password}."""
+            """POST /api/login {name}, /api/logout. No password: the ID is the account."""
             if not login_on:
                 return self._json({"error": "accounts are off here (delivery.login)"}, 404)
+            if self.path == "/api/logout":
+                return self._json({"ok": True}, cookie="user=; Path=/; Max-Age=0; SameSite=Lax")
             con = db.connect(db_path)
             try:
-                if self.path == "/api/logout":
-                    db.end_session(con, self._token())
-                    return self._json({"ok": True}, cookie="session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax")
-                name, pw = str(body.get("name", "")), str(body.get("password", ""))
-                if self.path == "/api/signup":
-                    try:
-                        name = db.add_user(con, name, pw)
-                    except ValueError as e:
-                        return self._json({"error": str(e)}, 400)
-                else:
-                    name = db.check_password(con, name, pw)
-                    if not name:
-                        time.sleep(1)  # slows down password guessing
-                        return self._json({"error": "wrong name or password"}, 403)
-                token = db.new_session(con, name)
-                return self._json(
-                    {"ok": True, "user": name},
-                    cookie=f"session={token}; Path=/; Max-Age={400 * 86400}; HttpOnly; SameSite=Lax",
-                )
+                name = db.login(con, str(body.get("name", "")))
+            except ValueError as e:
+                return self._json({"error": str(e)}, 400)
             finally:
                 con.close()
+            return self._json({"ok": True, "user": name}, cookie=f"user={name}; Path=/; Max-Age={400 * 86400}; SameSite=Lax")
 
         def do_GET(self):
             nonlocal vectors
@@ -318,7 +304,7 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if not isinstance(body, dict):
                     raise ValueError("expected a JSON object")
-                if self.path in ("/api/signup", "/api/login", "/api/logout"):
+                if self.path in ("/api/login", "/api/logout"):
                     return self._account(body)
                 pid = str(body["id"])
                 if not re.fullmatch(r"\d{4}\.\d{4,5}|[a-z.\-]+/\d{7}", pid):

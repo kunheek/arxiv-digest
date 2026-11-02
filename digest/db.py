@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -57,10 +56,7 @@ CREATE TABLE IF NOT EXISTS visits (
   PRIMARY KEY (date, visitor)
 );
 CREATE TABLE IF NOT EXISTS users (
-  name TEXT PRIMARY KEY, pw TEXT NOT NULL, created_at TEXT
-);
-CREATE TABLE IF NOT EXISTS sessions (
-  token TEXT PRIMARY KEY, user TEXT NOT NULL, created_at TEXT
+  name TEXT PRIMARY KEY, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS user_ratings (
   user TEXT NOT NULL, id TEXT NOT NULL, rating INTEGER NOT NULL, rated_at TEXT, PRIMARY KEY (user, id)
@@ -307,79 +303,26 @@ def bookmarks(con: sqlite3.Connection, user: str | None = None) -> list[str]:
 
 # ── accounts (delivery.login) ────────────────────────────────────────────
 # Logged out, picks are the lab's shared ones (tables ratings/likes/bookmarks); logged in, they
-# are the user's own (user_* tables). Passwords are salted PBKDF2 hashes; a session cookie
-# holds a random token, of which only the SHA-256 is stored.
+# are the user's own (user_* tables). An account is just an ID, with no password: whoever types
+# an ID gets its picks. The site keeps the ID in a cookie.
 _NAME = re.compile(r"[a-z0-9][a-z0-9_.-]{0,31}")
-MIN_PASSWORD = 6
 
 
-def _hash_pw(pw: str, salt: bytes | None = None) -> str:
-    salt = salt or secrets.token_bytes(16)
-    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, 200_000)
-    return f"pbkdf2${salt.hex()}${h.hex()}"
-
-
-def _check_pw(pw: str, stored: str) -> bool:
-    _, salt, _h = stored.split("$")
-    return hmac.compare_digest(_hash_pw(pw, bytes.fromhex(salt)), stored)
-
-
-def _valid_password(pw: str) -> None:
-    if len(pw) < MIN_PASSWORD:
-        raise ValueError(f"password must be at least {MIN_PASSWORD} characters")
-
-
-def add_user(con: sqlite3.Connection, name: str, pw: str) -> str:
-    """Create an account; returns the name as stored (lower case). ValueError if it's taken or bad."""
+def login(con: sqlite3.Connection, name: str) -> str:
+    """Log in as `name`, creating the account on first use; returns the ID as stored (lower
+    case). ValueError if it isn't a valid ID."""
     name = name.strip().lower()
     if not _NAME.fullmatch(name):
-        raise ValueError("name: 1–32 letters, digits, '.', '_' or '-'")
-    _valid_password(pw)
-    try:
-        with con:
-            con.execute("INSERT INTO users VALUES (?,?,?)", (name, _hash_pw(pw), _now()))
-    except sqlite3.IntegrityError:
-        raise ValueError(f"the name {name!r} is taken") from None
+        raise ValueError("ID: 1–32 letters, digits, '.', '_' or '-'")
+    with con:
+        con.execute("INSERT OR IGNORE INTO users VALUES (?,?)", (name, _now()))
     return name
 
 
-def check_password(con: sqlite3.Connection, name: str, pw: str) -> str | None:
-    """The user's name if the password is right, else None."""
-    name = name.strip().lower()
-    r = con.execute("SELECT pw FROM users WHERE name = ?", (name,)).fetchone()
-    return name if r and _check_pw(pw, r["pw"]) else None
-
-
-def set_password(con: sqlite3.Connection, name: str, pw: str) -> None:
-    """Reset a password (run.py --set-password); logs the user out everywhere."""
-    _valid_password(pw)
-    with con:
-        if not con.execute("UPDATE users SET pw = ? WHERE name = ?", (_hash_pw(pw), name)).rowcount:
-            raise ValueError(f"no user {name!r}")
-        con.execute("DELETE FROM sessions WHERE user = ?", (name,))
-
-
-def _token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-def new_session(con: sqlite3.Connection, name: str) -> str:
-    token = secrets.token_urlsafe(32)
-    with con:
-        con.execute("INSERT INTO sessions VALUES (?,?,?)", (_token_hash(token), name, _now()))
-    return token
-
-
-def session_user(con: sqlite3.Connection, token: str) -> str | None:
-    if not token:
-        return None
-    r = con.execute("SELECT user FROM sessions WHERE token = ?", (_token_hash(token),)).fetchone()
-    return r["user"] if r else None
-
-
-def end_session(con: sqlite3.Connection, token: str) -> None:
-    with con:
-        con.execute("DELETE FROM sessions WHERE token = ?", (_token_hash(token),))
+def known_user(con: sqlite3.Connection, name: str) -> str | None:
+    """`name` if it is an account (the ID in a visitor's cookie), else None."""
+    r = con.execute("SELECT name FROM users WHERE name = ?", (name,)).fetchone() if name else None
+    return r["name"] if r else None
 
 
 def user_report(con: sqlite3.Connection) -> str:

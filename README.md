@@ -107,11 +107,10 @@ scripts/install.sh --serve --config config.kcvl.yaml --host 0.0.0.0   # http://<
 - Anyone who can reach the port can read the site and, **logged out**, change the shared
   ratings, likes and bookmarks, which train the scorer (shared taste). Keep it on the lab network
   or behind a VPN / SSH tunnel.
-- **Accounts** (`delivery.login: true`): anyone can create one from the *Log in* button (name +
-  password, 6+ characters). Logged in, ratings, likes and bookmarks are that person's own and
-  *for you ♥* ranks by them (local embeddings, no Claude calls); they don't feed the scorer.
-  Passwords are stored as salted PBKDF2 hashes, but the site is plain HTTP, so they cross the
-  network readable. `run.py --users` lists accounts; `run.py --set-password NAME` resets one.
+- **Accounts** (`delivery.login: true`): *Log in* asks only for an ID (any name; a new one
+  starts an account). Logged in, ratings, likes and bookmarks are that ID's own and *for you ♥*
+  ranks by them (local embeddings, no Claude calls); they don't feed the scorer. There is no
+  password, so anyone who types an ID gets its picks. `run.py --users` lists the IDs.
 - **Many people at once:** the server answers each request in its own thread, and the database
   runs in SQLite's WAL mode, so clicks never wait on readers or on a daily run. Browsers keep the
   paper index and only re-download it after a run (ETag). Picks are shared: one rating per paper,

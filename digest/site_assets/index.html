@@ -67,11 +67,10 @@
   <form id="loginform">
     <h2>Log in</h2>
     <p>Logged out, ratings, likes and bookmarks are shared by the whole lab. Log in to keep your own, and to rank papers <i>for you ♥</i> by them.</p>
-    <label>Name <input id="lname" autocomplete="username" maxlength="32" required spellcheck="false" autocapitalize="off"></label>
-    <label>Password <input id="lpw" type="password" autocomplete="current-password" required></label>
+    <label>ID <input id="lname" autocomplete="username" maxlength="32" required spellcheck="false" autocapitalize="off" placeholder="e.g. your name"></label>
     <p class="err" id="lerr" role="alert"></p>
-    <div class="row"><button class="btn" data-how="login">Log in</button><button class="btn" data-how="signup">Create account</button><button class="btn" type="button" data-how="cancel">Cancel</button></div>
-    <p class="qn">New here? Pick a name and a password (6+ characters), then <b>Create account</b>. This site is plain HTTP, so don't reuse a password from elsewhere.</p>
+    <div class="row"><button class="btn">Log in</button><button class="btn" type="button" data-how="cancel">Cancel</button></div>
+    <p class="qn">A new ID starts an account; type the same ID on any device to get your picks back. There's no password, so anyone who types your ID sees and changes your picks.</p>
   </form>
   <div id="loggedin" hidden>
     <h2>Logged in as <span id="lwho"></span></h2>

@@ -346,7 +346,7 @@ const updatedHTML = () => {
   return `<span class="upd" title="Last time new papers were added">Updated ${esc(f)}</span>`;
 };
 // Accounts (delivery.login): logged out, picks are the lab's shared ones; logged in, they are
-// the user's own (the server keys them to the session cookie, so nothing else changes here).
+// the user's own (the server keys them to the ID cookie, so nothing else changes here).
 let USER = "";
 function showAccount() {
   const b = $("#acct");
@@ -364,9 +364,8 @@ $("#loginbox").addEventListener("keydown", (e) => e.stopPropagation());  // typi
 $("#loginbox").addEventListener("click", (e) => { if (e.target.dataset.how === "cancel") $("#loginbox").close(); });
 $("#loginform").onsubmit = async (e) => {
   e.preventDefault();
-  const how = e.submitter?.dataset.how === "signup" ? "signup" : "login";
-  const r = await fetch("api/" + how, { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: $("#lname").value.trim(), password: $("#lpw").value }) }).catch(() => null);
+  const r = await fetch("api/login", { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: $("#lname").value.trim() }) }).catch(() => null);
   const j = r ? await r.json().catch(() => ({})) : { error: "can't reach the server" };
   if (r && r.ok) location.reload(); else $("#lerr").textContent = j.error || "failed";
 };
