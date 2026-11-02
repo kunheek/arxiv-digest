@@ -355,11 +355,23 @@ function showAccount() {
   b.classList.toggle("on", !!USER);
   b.title = USER ? `Logged in as ${USER}: your picks are your own` : "Log in for your own bookmarks and ranking";
 }
-$("#acct").onclick = () => {
+// `promo`: the one-time "new feature" version of the same box
+function openLogin(promo = false) {
   $("#loginform").hidden = !!USER; $("#loggedin").hidden = !USER;
   $("#lwho").textContent = USER; $("#lerr").textContent = "";
+  $("#lhead").textContent = promo ? "New: your own bookmarks and ranking" : "Log in";
+  $("#lcancel").textContent = promo ? "Not now" : "Cancel";
   $("#loginbox").showModal();
-};
+}
+$("#acct").onclick = () => openLogin();
+// Shown once per browser to logged-out visitors, after the About box if that is showing.
+function promoteLogin() {
+  if (USER || store.get("loginPromoSeen")) return;
+  store.set("loginPromoSeen", "1");
+  const ab = $("#aboutbox");
+  if (ab && ab.open) ab.addEventListener("close", () => openLogin(true), { once: true });
+  else openLogin(true);
+}
 $("#loginbox").addEventListener("keydown", (e) => e.stopPropagation());  // typing a name isn't a shortcut
 $("#loginbox").addEventListener("click", (e) => { if (e.target.dataset.how === "cancel") $("#loginbox").close(); });
 $("#loginform").onsubmit = async (e) => {
@@ -529,7 +541,7 @@ fetch("api/state").then((r) => (r.ok ? r.json() : null)).catch(() => null).then(
   if (st && st.ratings) { LOCAL = true;
     refreshTaste(); ratings = st.ratings; saved = new Set(st.bookmarks); liked = new Set(st.likes); document.title += " ·local";
     explained = new Set(st.explained || []); EXPLAIN_ON = !!st.explain_on;
-    if (st.login_on) { USER = st.user || ""; showAccount(); }
+    if (st.login_on) { USER = st.user || ""; showAccount(); promoteLogin(); }
     return; }
   document.body.classList.add("ro");  // public site: read-only mirror of the local picks
   return fetch("data/prefs.json").then((r) => (r.ok ? r.json() : null)).catch(() => null)

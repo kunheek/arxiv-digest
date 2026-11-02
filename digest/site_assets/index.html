@@ -67,11 +67,11 @@
 </dialog>
 <dialog id="loginbox">
   <form id="loginform">
-    <h2>Log in</h2>
+    <h2 id="lhead">Log in</h2>
     <p>Logged out, ratings, likes and bookmarks are shared by the whole lab. Log in to keep your own, and to rank papers <i>for you ♥</i> by them.</p>
     <label>ID <input id="lname" autocomplete="username" maxlength="32" required spellcheck="false" autocapitalize="off" placeholder="e.g. your name"></label>
     <p class="err" id="lerr" role="alert"></p>
-    <div class="row"><button class="btn">Log in</button><button class="btn" type="button" data-how="cancel">Cancel</button></div>
+    <div class="row"><button class="btn">Log in</button><button class="btn" type="button" data-how="cancel" id="lcancel">Cancel</button></div>
     <p class="qn">A new ID starts an account; type the same ID on any device to get your picks back. There's no password, so anyone who types your ID sees and changes your picks.</p>
   </form>
   <div id="loggedin" hidden>
