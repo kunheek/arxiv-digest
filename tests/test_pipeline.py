@@ -1190,3 +1190,13 @@ def test_add_papers_by_id(tmp_path, monkeypatch, capsys):
     assert "2611.99999: not found on arXiv" in capsys.readouterr().out
     with pytest.raises(SystemExit):
         run.main(["--config", os.path.join(root, "config.yaml"), "--db", path, "--like"])
+
+
+def test_page_title_and_icon_follow_config():
+    from digest import site
+    page = site.page_html("KCVL arXiv digest")
+    assert "<title>KCVL arXiv digest</title>" in page and 'href="favicon.svg"' in page and "{{" not in page
+    lab = site.page_html("T", icon="lab")
+    assert 'href="favicon-lab.svg"' in lab and 'href="favicon-lab.png"' in lab
+    for name in ("favicon.svg", "favicon.png", "favicon-lab.svg", "favicon-lab.png"):
+        assert os.path.isfile(os.path.join(site.ASSETS, name))

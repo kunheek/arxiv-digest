@@ -144,7 +144,7 @@ def make_handler(db_path: str, title: str, cfg: dict | None = None, llm=None):
     tastes, taste_lock = _Lru(64), threading.Lock()
     days = _Lru(64)  # built day files (~0.5 MB gzipped each), so a popular day is built once
     about = site.about_html(cfg) if cfg.get("delivery", {}).get("about") else ""
-    page = site.page_html(title, local=True, about=about).encode()
+    page = site.page_html(title, about, cfg.get("delivery", {}).get("icon", "")).encode()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *a):  # quiet

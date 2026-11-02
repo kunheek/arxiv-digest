@@ -180,11 +180,12 @@ def about_html(cfg: dict) -> str:
     )
 
 
-def page_html(title: str, local: bool = False, about: str = "") -> str:
-    """`about`: the about_html() dialog, or "" for none (the ⓘ button stays hidden)."""
+def page_html(title: str, about: str = "", icon: str = "") -> str:
+    """`about`: the about_html() dialog, or "" for none (the ⓘ button stays hidden).
+    `icon`: "" for the blue favicon, or e.g. "lab" for favicon-lab.svg/.png (delivery.icon)."""
     with open(os.path.join(ASSETS, "index.html")) as f:
-        page = f.read().replace("{{TITLE}}", title + (" (local)" if local else ""))
-    return page.replace("{{ABOUT}}", about)
+        page = f.read().replace("{{TITLE}}", title)
+    return page.replace("{{ABOUT}}", about).replace("{{ICON}}", f"favicon-{icon}" if icon else "favicon")
 
 
 def build(

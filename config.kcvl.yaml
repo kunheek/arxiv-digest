@@ -146,4 +146,5 @@ delivery:
   publish_branch: gh-pages   # not used
   site_title: KCVL arXiv digest
   about: true                # ⓘ "About this digest" on the site, shown on a visitor's first visit
+  icon: lab                  # green favicon (favicon-lab.svg), to tell the lab's tab from a personal digest's
   login: true                # optional accounts: logged in, ratings/likes/bookmarks and "for you ♥" are your own
