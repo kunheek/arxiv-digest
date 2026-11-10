@@ -27,7 +27,7 @@ git clone https://github.com/kunheek/arxiv-digest.git ~/arxiv-digest && cd ~/arx
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env && chmod 600 .env && nano .env     # ANTHROPIC_API_KEY, optional DISCORD_WEBHOOK
 scripts/run_daily.sh --dry-run --max-papers 20          # test: no Discord, nothing saved
-scripts/install.sh --serve                              # Mon–Fri 14:03 and 16:03 KST + local site
+scripts/install.sh --serve                              # Mon–Fri 14:03, 16:03, 18:03 KST + local site
 ```
 - **API key:** <https://platform.claude.com> → API keys. The digest uses the API, which is
   billed separately from chat usage.
@@ -45,8 +45,8 @@ scripts/install.sh --serve                              # Mon–Fri 14:03 and 16
   logged out (if that's refused, run `sudo loginctl enable-linger $USER`). Next runs:
   `systemctl --user list-timers`; site log: `journalctl --user -u arxiv-digest-serve -f`.
 - **Cron** runs in the system timezone (not your shell's `TZ`); the installer converts
-  14:03/16:03 KST to it (check with `timedatectl`). The 16:03 run is a
-  catch-up in case arXiv's feed was late; it does nothing if 14:03 got today's papers.
+  14:03/16:03/18:03 KST to it (check with `timedatectl`). The 16:03 and 18:03 runs are
+  catch-ups in case arXiv's feed was late; they do nothing if an earlier run got today's papers.
   Cron doesn't catch up on runs missed while the machine was off. Each run `git pull`s first
   (set `AUTO_PULL=0` in `.env` to stop that).
 - **macOS:** `install_launchd.sh` uses launchd rather than cron, because launchd starts a run

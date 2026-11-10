@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# macOS counterpart of install_cron.sh: run the digest Mon–Fri 14:03 and 16:03 Korea time with
+# macOS counterpart of install_cron.sh: run the digest Mon–Fri 14:03, 16:03 and 18:03 Korea time with
 # launchd. Unlike cron, launchd starts a run that was due while the Mac slept as soon as it
 # wakes (a run due while it was shut down is still missed).
 #
@@ -42,9 +42,9 @@ esac
 PY="$REPO/.venv/bin/python"
 [ -x "$PY" ] || { echo "ERROR: $PY not found; create the venv first (see README)." >&2; exit 1; }
 
-# launchd uses the Mac's own clock, so convert 14:03/16:03 KST to it. Where the Mac's timezone
+# launchd uses the Mac's own clock, so convert 14:03/16:03/18:03 KST to it. Where the Mac's timezone
 # has summer time, schedule the hours for both offsets (launchd can't follow another timezone);
-# run_daily.sh drops the firing that lands at 13:03 KST, and the extra late one finds nothing new.
+# run_daily.sh drops the firing that lands at 13:03 KST, and the extra ones find nothing new.
 hours=""; offsets=""; n_off=0
 for mmdd in 0115 0715; do
   sys_off="$(env -u TZ date -j -f %m%d "$mmdd" +%z)"
@@ -52,12 +52,12 @@ for mmdd in 0115 0715; do
   offsets+=" $sys_off"; n_off=$(( n_off + 1 ))
   sign=1; [ "${sys_off:0:1}" = "-" ] && sign=-1
   off_h=$(( sign * 10#${sys_off:1:2} )); off_m="${sys_off:3:2}"
-  h1=$(( 14 - 9 + off_h )); h2=$(( 16 - 9 + off_h ))
-  if [ "$off_m" != "00" ] || [ $h1 -lt 0 ] || [ $h2 -gt 23 ]; then
+  h1=$(( 14 - 9 + off_h )); h2=$(( 16 - 9 + off_h )); h3=$(( 18 - 9 + off_h ))
+  if [ "$off_m" != "00" ] || [ $h1 -lt 0 ] || [ $h3 -gt 23 ]; then
     echo "ERROR: timezone offset $sys_off needs a day shift or half-hour offset; edit this script by hand." >&2
     exit 1
   fi
-  for h in $h1 $h2; do case " $hours " in *" $h "*) ;; *) hours+=" $h" ;; esac; done
+  for h in $h1 $h2 $h3; do case " $hours " in *" $h "*) ;; *) hours+=" $h" ;; esac; done
 done
 env_xml=""
 [ $n_off -gt 1 ] && env_xml="<key>EnvironmentVariables</key><dict><key>SKIP_KST_HOUR</key><string>13</string></dict>"
@@ -92,7 +92,7 @@ $times  </array>
 </plist>
 EOF
 load "$DAILY"
-echo "timezone offset${offsets} → daily run Mon–Fri at:$(printf ' %s:03' $(printf '%s\n' $hours | sort -n)) (= 14:03 and 16:03 KST)"
+echo "timezone offset${offsets} → daily run Mon–Fri at:$(printf ' %s:03' $(printf '%s\n' $hours | sort -n)) (= 14:03, 16:03 and 18:03 KST)"
 
 if [ $SERVE_SITE = 1 ]; then
   cat > "$AGENTS/$SERVE.plist" <<EOF

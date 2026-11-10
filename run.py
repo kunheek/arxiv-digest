@@ -292,12 +292,13 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
     if not papers:
         print("nothing new today (weekend/holiday, or already processed)")
         # tell me when the feed itself was empty (e.g. US holiday). An already-processed day
-        # (the 16:03 catch-up after a good 14:03 run) stays quiet.
+        # (a 16:03 or 18:03 catch-up after a good earlier run) stays quiet.
         hook = os.environ.get("DISCORD_WEBHOOK")
         if not args.rescore and feed_empty and not args.dry_run and hook and cfg["delivery"].get("discord"):
             hour = dt.datetime.now(ZoneInfo("Asia/Seoul")).hour
             try:
-                deliver.to_discord_empty(today, hook, "16:03 KST" if hour < 15 else "")
+                retry = "16:03 KST" if hour < 15 else "18:03 KST" if hour < 17 else ""
+                deliver.to_discord_empty(today, hook, retry)
                 print("    posted 'no papers' notice to Discord")
             except Exception as e:
                 print(f"    WARNING: Discord notice failed: {e}")

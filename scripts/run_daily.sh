@@ -20,7 +20,7 @@ WEBHOOK="${DISCORD_WEBHOOK:-$(envval DISCORD_WEBHOOK)}"
 PY="$REPO/.venv/bin/python"
 [ -x "$PY" ] || PY="$(command -v python3)"
 
-# launchd fires at both the standard- and summer-time hours for 14:03/16:03 KST (it can't follow
+# launchd fires at both the standard- and summer-time hours for 14:03/16:03/18:03 KST (it can't follow
 # another timezone), so the one that lands an hour early is dropped here
 [ -n "${SKIP_KST_HOUR:-}" ] && [ "$(TZ=Asia/Seoul date +%H)" = "$SKIP_KST_HOUR" ] && exit 0
 

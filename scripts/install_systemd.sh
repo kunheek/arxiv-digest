@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Linux counterpart of install_launchd.sh: run the digest Mon–Fri 14:03 and 16:03 Korea time with
+# Linux counterpart of install_launchd.sh: run the digest Mon–Fri 14:03, 16:03 and 18:03 Korea time with
 # a systemd user timer. Unlike cron, the timer is Persistent: a run that was due while the machine
 # was off or asleep starts as soon as it is back. Linger is enabled so it runs without a login.
 #
@@ -51,10 +51,10 @@ EOF
 # OnCalendar takes the timezone itself, so no conversion to the system timezone is needed
 cat > "$UNITS/$DAILY.timer" <<EOF
 [Unit]
-Description=arXiv daily digest, Mon–Fri 14:03 and 16:03 KST
+Description=arXiv daily digest, Mon–Fri 14:03, 16:03 and 18:03 KST
 
 [Timer]
-OnCalendar=Mon..Fri *-*-* 14,16:03:00 Asia/Seoul
+OnCalendar=Mon..Fri *-*-* 14,16,18:03:00 Asia/Seoul
 Persistent=true
 
 [Install]
@@ -79,17 +79,17 @@ EOF
 fi
 
 systemctl --user daemon-reload
-if ! systemd-analyze calendar "Mon..Fri *-*-* 14,16:03:00 Asia/Seoul" >/dev/null 2>&1; then
+if ! systemd-analyze calendar "Mon..Fri *-*-* 14,16,18:03:00 Asia/Seoul" >/dev/null 2>&1; then
   # systemd < 239 has no timezone in OnCalendar: fall back to the system timezone
   sys_off="$(env -u TZ date +%z)"
   sign=1; [ "${sys_off:0:1}" = "-" ] && sign=-1
   off_h=$(( sign * 10#${sys_off:1:2} )); off_m="${sys_off:3:2}"
-  h1=$(( 14 - 9 + off_h )); h2=$(( 16 - 9 + off_h ))
-  if [ "$off_m" != "00" ] || [ $h1 -lt 0 ] || [ $h2 -gt 23 ]; then
+  h1=$(( 14 - 9 + off_h )); h2=$(( 16 - 9 + off_h )); h3=$(( 18 - 9 + off_h ))
+  if [ "$off_m" != "00" ] || [ $h1 -lt 0 ] || [ $h3 -gt 23 ]; then
     echo "ERROR: timezone offset $sys_off needs a day shift or half-hour offset; edit $UNITS/$DAILY.timer by hand." >&2
     exit 1
   fi
-  sed -i "s|^OnCalendar=.*|OnCalendar=Mon..Fri *-*-* $h1,$h2:03:00|" "$UNITS/$DAILY.timer"
+  sed -i "s|^OnCalendar=.*|OnCalendar=Mon..Fri *-*-* $h1,$h2,$h3:03:00|" "$UNITS/$DAILY.timer"
   systemctl --user daemon-reload
 fi
 systemctl --user enable --now "$DAILY.timer"
