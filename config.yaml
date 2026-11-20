@@ -52,7 +52,6 @@ broad_examples:
   - "Flow Matching for Generative Modeling"
   - "LoRA: Low-Rank Adaptation of Large Language Models"
   - "Hopfield Networks is All You Need"
-  - "Wan: Open and Advanced Large-Scale Video Generative Models"
 
 # Researchers whose new papers you never want to miss (matched against author lists).
 # Use the name exactly as it appears on arXiv (word order matters).

@@ -33,14 +33,6 @@ interest_profile: |
   - Video diffusion transformers: architecture, training, camera and motion control, video generation with 3D consistency, and efficient inference (caching, distillation, quantization, sparse attention)
   - Generative models: diffusion, flow matching and score-based models for images, video, 3D and motion
   - Transformer architecture research: vision transformers (ViT), state space models (SSMs, e.g. Mamba), linear and sparse attention, positional encodings, efficient multimodal LLMs (visual token pruning and sparse vision-language interaction), and other efficient or alternative sequence models
-  - 6D object pose estimation (category-level, model-free, one-shot) and 3D object detection (including semi-supervised)
-
-  Secondary interests:
-  - Multimodal foundation models and vision-language models, and their use in robotics,
-    embodied AI and AI4Science (e.g. protein structure and function)
-  - Action recognition (skeleton, body-hand) and human and pedestrian trajectory prediction
-  - Image restoration and enhancement (adverse weather, low light), text-guided image editing,
-    self-supervised depth estimation, person re-identification
 
   Important beyond these topics (read by everyone in the lab):
   - General-purpose building blocks (architectures, attention, optimizers, training recipes)
