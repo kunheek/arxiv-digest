@@ -259,6 +259,39 @@ def test_failed_batch_is_skipped_not_fatal():
     assert all(p.interest == 0 for p in papers)
 
 
+def test_scoring_outage_saves_nothing_so_the_catch_up_run_retries(tmp_path, monkeypatch):
+    """If no paper can be scored (API down, out of credit), the run must fail instead of saving
+    the day at relevance 0 and marking it seen, which made the catch-up runs skip it."""
+    import numpy as np
+    import yaml
+    from digest import embed, zotero
+
+    monkeypatch.setattr(enrich_mod, "fetch_html", lambda p, max_intro_chars=6000: None)
+    monkeypatch.setattr(embed, "encode", lambda texts: np.eye(len(texts), 384, dtype=np.float32))
+    monkeypatch.setattr(zotero, "configured", lambda: False)
+    monkeypatch.setattr(run.deliver, "to_markdown", lambda *a, **k: None)
+    monkeypatch.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    cfg = yaml.safe_load(open("config.yaml"))
+    cfg["delivery"].update(site=False, publish=False, discord=False)
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg))
+    args = ["--state", str(tmp_path / "seen.json"), "--config", str(cfg_path), "--db", str(tmp_path / "d.db")]
+
+    def fetcher(cats, types_):
+        return [p for p in parse_rss(make_rss()) if p.announce_type in types_]
+
+    class Down(FakeClient):
+        def create(self, model, max_tokens, system, messages, output_config=None):
+            raise RuntimeError("credit balance is too low")
+
+    assert run.main(args, llm=LLM(Down()), fetcher=fetcher) == 1
+    assert not (tmp_path / "seen.json").exists()
+    assert run.main(args, llm=LLM(FakeClient()), fetcher=fetcher) == 0  # catch-up run
+    con = sqlite3.connect(str(tmp_path / "d.db"))
+    assert dict(con.execute("SELECT id, interest FROM papers")) == {
+        "2610.00001": 9, "2610.00002": 8, "2610.00003": 1}
+
+
 def test_env_file(tmp_path, monkeypatch):
     from digest.env import load_env
 
