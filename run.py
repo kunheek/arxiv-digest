@@ -320,7 +320,11 @@ def main(argv=None, llm: LLM | None = None, fetcher=fetch_today) -> int:
             print(f"    using {len(liked)} papers you liked, bookmarked or rated highly as examples")
 
     print("2/5 scoring abstracts")
-    score_all(papers, cfg, llm, liked)
+    if not score_all(papers, cfg, llm, liked):
+        # e.g. the API is down or out of credit: saving would store the whole day at relevance 0
+        # and mark it seen, so the catch-up runs would skip it
+        print("ERROR: no paper could be scored; nothing was saved or marked as seen")
+        return 1
     if cfg["ranking"].get("impact_review_n", 20):
         review_impact(papers, cfg, llm)
 

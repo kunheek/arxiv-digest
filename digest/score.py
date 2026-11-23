@@ -123,7 +123,8 @@ def build_system(cfg: dict, liked: list[str]) -> str:
     )
 
 
-def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> None:
+def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> int:
+    """Score `papers` in place and return how many got a score (failed batches are skipped)."""
     system = build_system(cfg, liked)
     model = cfg["models"]["scorer"]
     bs = cfg["models"].get("score_batch_size", 20)
@@ -163,6 +164,7 @@ def score_all(papers: list[Paper], cfg: dict, llm: LLM, liked: list[str]) -> Non
                 p.tags = list(r.get("tags", []))[:3]
                 scored += 1
     print(f"    scored {scored}/{len(papers)} papers")
+    return scored
 
 
 REVIEW_SYSTEM = """You are a senior computer-vision / graphics / deep-learning researcher giving a second
